@@ -1,0 +1,28 @@
+# Build artifacts
+target/
+*.jar
+
+# Datos de runtime (los monta docker-compose como volumen)
+uploads/
+
+# IDE / editores
+.idea/
+.vscode/
+*.iml
+
+# VCS
+
+# Docker / compose
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Entorno local
+.env
+.env.*
+
+# Documentación y logs
+README*
+*.md
+*.log
+logs/

@@ -1,0 +1,116 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: store-postgres
+    environment:
+      POSTGRES_DB: store_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - store-network
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: store-redis
+    networks:
+      - store-network
+    restart: always
+
+  backend:
+    build: ./store-backend
+    container_name: store-backend
+    environment:
+      TZ: UTC
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=UTC"
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/store_db
+      SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+    volumes:
+      - ./store-backend/uploads:/app/uploads
+    expose:
+      - "8080"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - store-network
+    restart: always
+
+  frontend:
+    build:
+      context: ./store-frontend
+      args:
+        # NEXT_PUBLIC_* se bakean en el bundle en build time.
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-/api}
+    container_name: store-frontend
+    environment:
+      # BACKEND_URL lo usa next.config.ts (rewrites) en runtime del server Next.
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8080}
+    ports:
+      - "3000:3000"
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    networks:
+      - store-network
+    restart: always
+
+  nginx-proxy:
+    image: 'jc21/nginx-proxy-manager:latest'
+    container_name: nginx-proxy-manager
+    restart: always
+    dns:
+      - 127.0.0.11
+    ports:
+      - '80:80'
+      - '443:443'
+      - '81:81'
+    environment:
+      DB_MYSQL_HOST: "mysql"
+      DB_MYSQL_PORT: 3306
+      DB_MYSQL_USER: "npm"
+      DB_MYSQL_PASSWORD: ${DB_PASSWORD}
+      DB_MYSQL_NAME: "npm"
+    volumes:
+      - ./nginx-data:/data
+      - ./nginx-letsencrypt:/etc/letsencrypt
+    depends_on:
+      - mysql
+    networks:
+      - store-network
+
+  mysql:
+    image: 'mysql:8'
+    container_name: nginx-proxy-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: 'npm'
+      MYSQL_USER: 'npm'
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+    networks:
+      - store-network
+
+volumes:
+  postgres_data:
+  mysql_data:
+
+networks:
+  store-network:
+    driver: bridge

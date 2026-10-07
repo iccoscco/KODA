@@ -1,0 +1,76 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+  forward-headers-strategy: framework
+
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  application:
+    name: store-backend
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/store_db}
+    username: postgres
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: ${JPA_SHOW_SQL:true}
+    properties:
+      hibernate:
+        format_sql: ${JPA_SHOW_SQL:true}
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  jackson:
+    # Todas las fechas se serializan/parsean como UTC para que el frontend las
+    # muestre en la zona horaria local del usuario sin depender del servidor.
+    # El formato ISO-8601 con sufijo "Z" se fuerza desde JacksonConfig
+    # (serializer/deserializer custom para LocalDateTime).
+    time-zone: UTC
+
+jwt:
+  # Secreto HS256: cadena HEX de 64 caracteres (32 bytes). Generar: openssl rand -hex 32
+  secret: ${JWT_SECRET:123fa9ec6574f680ab5bce5259071c014148faebf537ccc3375fe603a428964f}
+  access-token-expiration: 86400000
+  refresh-token-expiration: 604800000
+  issuer: ${JWT_ISSUER:store-backend}
+
+# Orígenes CORS (URL del frontend). Por defecto solo local; en prod definir CORS_ALLOWED_ORIGINS (coma-separado).
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  auth:
+    cookie:
+      secure: ${AUTH_COOKIE_SECURE:false}
+      same-site: ${AUTH_COOKIE_SAMESITE:Lax}
+      domain: ${AUTH_COOKIE_DOMAIN:}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
+    path: /swagger-ui.html
+    operationsSorter: method
+    tagsSorter: alpha
+    try-it-out-enabled: true
+    filter: true
+    with-credentials: true
+
+file:
+  upload-dir: uploads
+
