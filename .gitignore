@@ -1,0 +1,55 @@
+# Variables y credenciales locales (en cualquier módulo)
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+
+# Java / Maven / Spring Boot
+target/
+*.class
+*.jar
+*.war
+*.ear
+# El wrapper de Maven, si incluye su JAR, debe poder versionarse.
+!**/.mvn/wrapper/maven-wrapper.jar
+*.hprof
+*.jfr
+hs_err_pid*
+replay_pid*
+
+# Datos generados por el backend en ejecución
+store-backend/uploads/
+
+# Frontend: dependencias y salidas de Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Registros y archivos temporales
+*.log
+*.log.*
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.swp
+
+# Configuración personal del editor y del sistema operativo
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+.factorypath
+nbproject/private/
+.metadata/
+.DS_Store
+Thumbs.db

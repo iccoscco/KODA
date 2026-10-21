@@ -12,6 +12,12 @@ import java.util.Optional;
 
 @Repository
 public interface ProductVariantRepository extends JpaRepository<ProductVariant, Long> {
+    Optional<ProductVariant> findByIdAndProduct_Local_Id(Long id, Long localId);
+    List<ProductVariant> findByProductIdAndProduct_Local_Id(Long productId, Long localId);
+    List<ProductVariant> findByProductIdAndProduct_Local_IdAndIsActiveTrue(Long productId, Long localId);
+
+    @Query("SELECT pv FROM ProductVariant pv WHERE pv.product.local.id = :localId AND pv.stock < :minStock")
+    List<ProductVariant> findLowStockInLocal(@Param("localId") Long localId, @Param("minStock") Integer minStock);
 
     Optional<ProductVariant> findByProductIdAndColorIdAndSizeId(Long productId, Long colorId, Long sizeId);
 
@@ -32,8 +38,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             @Param("colorId") Long colorId,
             @Param("sizeId") Long sizeId);
 
-    Optional<ProductVariant> findBySku(String sku);
-
     List<ProductVariant> findByProductId(Long productId);
 
     @Query("SELECT pv FROM ProductVariant pv WHERE pv.product.id = :productId AND pv.isActive = true")
@@ -42,7 +46,7 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     @Query("SELECT pv FROM ProductVariant pv WHERE pv.stock < :minStock")
     List<ProductVariant> findLowStock(@Param("minStock") Integer minStock);
 
-    boolean existsBySku(String sku);
+    boolean existsBySkuAndProduct_Local_Id(String sku, Long localId);
 
     Optional<ProductVariant> findFirstByProductIdAndSkuStartingWith(Long productId, String skuPrefix);
 

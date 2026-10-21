@@ -12,6 +12,8 @@ import com.yisus.store_backend.cash.repository.CashOpeningRepository;
 import com.yisus.store_backend.cash.repository.CashOutflowRepository;
 import com.yisus.store_backend.cash.repository.CashRegisterRepository;
 import com.yisus.store_backend.cash.service.CashOpeningService;
+import com.yisus.store_backend.local.service.LocalScope;
+import com.yisus.store_backend.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,14 +35,15 @@ public class CashOpeningServiceImpl implements CashOpeningService {
     private final CashRegisterRepository cashRegisterRepository;
     private final CashInflowRepository cashInflowRepository;
     private final CashOutflowRepository cashOutflowRepository;
+    private final LocalScope localScope;
 
     @Override
     @Transactional
     public CashStatusResponseDTO openCashRegister(CashOpenRequestDTO dto) {
-        CashRegister register = cashRegisterRepository.findById(dto.getCashRegisterId())
-                .orElseThrow(() -> new RuntimeException("Caja no encontrada"));
+        CashRegister register = cashRegisterRepository.findByIdAndLocal_Id(dto.getCashRegisterId(), localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
 
-        cashOpeningRepository.findByCashRegisterIdAndIsActiveTrue(register.getId()).ifPresent(o -> {
+        cashOpeningRepository.findByCashRegisterIdAndCashRegister_Local_IdAndIsActiveTrue(register.getId(), localScope.id()).ifPresent(o -> {
             throw new RuntimeException("Esta caja ya tiene una sesión abierta. Ciérrala antes de abrir otra.");
         });
 
@@ -59,7 +62,7 @@ public class CashOpeningServiceImpl implements CashOpeningService {
     @Override
     @Transactional(readOnly = true)
     public CashStatusResponseDTO getCurrentCashStatus(Long cashRegisterId) {
-        CashOpening opening = cashOpeningRepository.findByCashRegisterIdAndIsActiveTrue(cashRegisterId)
+        CashOpening opening = cashOpeningRepository.findByCashRegisterIdAndCashRegister_Local_IdAndIsActiveTrue(cashRegisterId, localScope.id())
                 .orElseThrow(() -> new RuntimeException("No hay sesión abierta en esta caja."));
 
         BigDecimal totalSales = sumInflows(opening);
@@ -74,7 +77,7 @@ public class CashOpeningServiceImpl implements CashOpeningService {
     @Override
     @Transactional
     public CashCloseResponseDTO closeCashRegister(CashCloseRequestDTO dto) {
-        CashOpening opening = cashOpeningRepository.findByCashRegisterIdAndIsActiveTrue(dto.getCashRegisterId())
+        CashOpening opening = cashOpeningRepository.findByCashRegisterIdAndCashRegister_Local_IdAndIsActiveTrue(dto.getCashRegisterId(), localScope.id())
                 .orElseThrow(() -> new RuntimeException("No hay sesión abierta en esta caja."));
 
         LocalDateTime now = LocalDateTime.now();
@@ -110,8 +113,8 @@ public class CashOpeningServiceImpl implements CashOpeningService {
     @Transactional(readOnly = true)
     public List<CashSessionHistoryDTO> getSessionHistory(Long cashRegisterId) {
         List<CashOpening> rows = cashRegisterId == null
-                ? cashOpeningRepository.findAllByOrderByOpenedAtDesc()
-                : cashOpeningRepository.findAllByCashRegisterIdOrderByOpenedAtDesc(cashRegisterId);
+                ? cashOpeningRepository.findAllByCashRegister_Local_IdOrderByOpenedAtDesc(localScope.id())
+                : cashOpeningRepository.findAllByCashRegisterIdAndCashRegister_Local_IdOrderByOpenedAtDesc(cashRegisterId, localScope.id());
         return rows.stream().map(this::toHistoryDTO).collect(Collectors.toList());
     }
 
@@ -157,12 +160,13 @@ public class CashOpeningServiceImpl implements CashOpeningService {
 
         if (sessionId == null && !filterOpenedFrom && !filterOpenedTo && !applyOrderFilter) {
             Pageable sorted = PageRequest.of(page, size, Sort.by("openedAt").descending());
-            return cashOpeningRepository.findSessionHistoryPaginatedNoSearch(cashRegisterId, sorted)
+            return cashOpeningRepository.findSessionHistoryPaginatedNoSearch(localScope.id(), cashRegisterId, sorted)
                     .map(this::toHistoryDTO);
         }
 
         Pageable unsorted = PageRequest.of(page, size);
         return cashOpeningRepository.findSessionHistoryPaginatedFiltered(
+                localScope.id(),
                 cashRegisterId,
                 sessionId,
                 filterOpenedFrom,

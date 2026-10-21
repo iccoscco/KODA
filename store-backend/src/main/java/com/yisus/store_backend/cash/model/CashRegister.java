@@ -1,5 +1,7 @@
 package com.yisus.store_backend.cash.model;
 
+import com.yisus.store_backend.local.model.Local;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +23,10 @@ public class CashRegister {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "local_id")
+    private Local local;
 
     /** Nombre visible de la caja (ej. Caja 1, Mostrador). */
     @Column(name = "name", length = 120, columnDefinition = "VARCHAR(120)")

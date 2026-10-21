@@ -4,6 +4,7 @@ import com.yisus.store_backend.cash.model.CashOpening;
 import com.yisus.store_backend.cash.model.CashRegister;
 import com.yisus.store_backend.cash.repository.CashOpeningRepository;
 import com.yisus.store_backend.cash.repository.CashRegisterRepository;
+import com.yisus.store_backend.local.repository.LocalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -24,6 +25,7 @@ public class CashRegisterBootstrap implements ApplicationRunner {
 
     private final CashRegisterRepository cashRegisterRepository;
     private final CashOpeningRepository cashOpeningRepository;
+    private final LocalRepository localRepository;
 
     @Override
     @Transactional
@@ -32,6 +34,8 @@ public class CashRegisterBootstrap implements ApplicationRunner {
             cashRegisterRepository.save(CashRegister.builder()
                     .name("Caja principal")
                     .balance(BigDecimal.ZERO)
+                    .local(localRepository.findByCode("LOCAL-001")
+                            .orElseThrow(() -> new IllegalStateException("Falta LOCAL-001")))
                     .build());
         }
         List<CashRegister> registers = cashRegisterRepository.findAllByOrderByIdAsc();

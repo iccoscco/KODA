@@ -1,5 +1,6 @@
 package com.yisus.store_backend.product.model;
 
+import com.yisus.store_backend.local.model.Local;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,6 +27,12 @@ public class ProductVariant {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    // Redundante con product.local a propósito: permite UNIQUE(local_id, sku)
+    // y una FK compuesta que impide asignar la variante a un producto de otro local.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "local_id")
+    private Local local;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "color_id", nullable = true)
     private Color color;
@@ -43,7 +50,7 @@ public class ProductVariant {
     @Builder.Default
     private Integer minStock = 0;
 
-    @Column(unique = true)
+    @Column
     private String sku;
 
     /**

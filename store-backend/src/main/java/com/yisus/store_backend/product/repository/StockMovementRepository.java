@@ -9,6 +9,7 @@ import java.util.List;
 @Repository
 public interface StockMovementRepository extends JpaRepository<StockMovement, Long> {
     List<StockMovement> findByProductVariantProductIdOrderByCreatedAtDesc(Long productId);
+    List<StockMovement> findByProductVariant_ProductIdAndProductVariant_Product_Local_IdOrderByCreatedAtDesc(Long productId, Long localId);
 
     @org.springframework.data.jpa.repository.Query("SELECT sm FROM StockMovement sm WHERE sm.unitCost IS NULL")
     List<StockMovement> findAllWithoutUnitCost();

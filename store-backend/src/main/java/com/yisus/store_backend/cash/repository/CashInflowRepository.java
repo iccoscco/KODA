@@ -7,12 +7,24 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
 public interface CashInflowRepository extends JpaRepository<CashInflow, Long> {
+    List<CashInflow> findAllByLocal_Id(Long localId);
+    Page<CashInflow> findAllByLocal_Id(Long localId, Pageable pageable);
+
+    @Query("SELECT ci FROM CashInflow ci WHERE ci.local.id = :localId AND ci.createdAt BETWEEN :startDate AND :endDate")
+    List<CashInflow> findByDateRangeInLocal(@Param("localId") Long localId, @Param("startDate") LocalDateTime startDate,
+                                            @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COALESCE(SUM(ci.amount), 0) FROM CashInflow ci WHERE ci.local.id = :localId AND ci.createdAt BETWEEN :startDate AND :endDate")
+    BigDecimal sumAmountByDateRangeInLocal(@Param("localId") Long localId, @Param("startDate") LocalDateTime startDate,
+                                            @Param("endDate") LocalDateTime endDate);
     
     List<CashInflow> findByOrder(Order order);
     

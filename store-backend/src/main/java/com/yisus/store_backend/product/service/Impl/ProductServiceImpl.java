@@ -14,7 +14,9 @@ import com.yisus.store_backend.product.repository.ProductVariantRepository;
 import com.yisus.store_backend.product.service.ProductService;
 import com.yisus.store_backend.category.model.Category;
 import com.yisus.store_backend.category.repository.CategoryRepository;
-import org.springframework.dao.DuplicateKeyException;
+import com.yisus.store_backend.local.service.LocalScope;
+import com.yisus.store_backend.common.exception.DuplicateResourceException;
+import com.yisus.store_backend.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +35,7 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final ProductImageRepository productImageRepository;
     private final ProductVariantRepository productVariantRepository;
+    private final LocalScope localScope;
 
     @Override
     @Transactional
@@ -42,18 +45,19 @@ public class ProductServiceImpl implements ProductService {
             validateDiscountPercentage(request.getDiscountPercentage());
         }
 
-        Category category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new RuntimeException("Category not found"));
+        Long localId = localScope.id();
+        Category category = categoryRepository.findByIdAndLocal_Id(request.getCategoryId(), localId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
 
         // Si ya existe un producto con ese nombre, decidir según su estado:
         // - Activo  -> duplicado real, rechazar.
         // - Inactivo (soft-deleted) -> reactivar con los nuevos datos para evitar
         //   chocar con la restricción UNIQUE en la columna name.
-        var existingOpt = productRepository.findByName(request.getName());
+        var existingOpt = productRepository.findByNameAndLocal_Id(request.getName(), localId);
         if (existingOpt.isPresent()) {
             Product existing = existingOpt.get();
             if (Boolean.TRUE.equals(existing.getIsActive())) {
-                throw new DuplicateKeyException("Product already exists");
+                throw new DuplicateResourceException("Product already exists in this local");
             }
 
             existing.setPurchasePrice(request.getPurchasePrice());
@@ -74,6 +78,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product product = Product.builder()
+                .local(localScope.local())
                 .name(request.getName())
                 .purchasePrice(request.getPurchasePrice())
                 .salePrice(request.getSalePrice())
@@ -110,14 +115,15 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductDTO updateProduct(Long id, ProductUpdateDTO productUpdateDTO) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Long localId = localScope.id();
+        Product product = productRepository.findByIdAndLocal_Id(id, localId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         if(productUpdateDTO.getName() != null){
-            productRepository.findByName(productUpdateDTO.getName())
+            productRepository.findByNameAndLocal_Id(productUpdateDTO.getName(), localId)
                     .ifPresent(existing -> {
                         if (!existing.getId().equals(id)) {
-                            throw new DuplicateKeyException("Product already exists");
+                            throw new DuplicateResourceException("Product already exists in this local");
                         }
                     });
             product.setName(productUpdateDTO.getName());
@@ -143,8 +149,8 @@ public class ProductServiceImpl implements ProductService {
             product.setIsFeatured(productUpdateDTO.getIsFeatured());
         }
         if(productUpdateDTO.getCategoryId() != null){
-            Category category = categoryRepository.findById(productUpdateDTO.getCategoryId())
-                    .orElseThrow(() -> new RuntimeException("Category not found"));
+            Category category = categoryRepository.findByIdAndLocal_Id(productUpdateDTO.getCategoryId(), localId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
             product.setCategory(category);
         }
         if(productUpdateDTO.getMinStock() != null){
@@ -153,8 +159,8 @@ public class ProductServiceImpl implements ProductService {
         productRepository.save(product);
         productRepository.flush();
 
-        Product refreshed = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product refreshed = productRepository.findByIdAndLocal_Id(id, localId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         return convertToDTO(refreshed);
     }
@@ -162,14 +168,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public void deleteProduct(Long id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         // Desactivar todas las variantes del producto para evitar variantes huérfanas.
-        // Además, liberar el SKU (columna UNIQUE) para que pueda reutilizarse al crear
+        // Además, liberar el SKU (único dentro del local) para reutilizarlo al crear
         // una nueva variante con ese mismo código más tarde. Preservamos el valor
         // anterior como histórico en el propio registro renombrándolo con un prefijo.
-        List<ProductVariant> variants = productVariantRepository.findByProductId(id);
+        List<ProductVariant> variants = productVariantRepository.findByProductIdAndProduct_Local_Id(id, localScope.id());
         if (!variants.isEmpty()) {
             long ts = System.currentTimeMillis();
             variants.forEach(v -> {
@@ -193,8 +199,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public void updateProductStatus(Long id, Boolean productUpdateStatusDTO) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
         product.setIsActive(productUpdateStatusDTO);
         productRepository.save(product);
     }
@@ -202,8 +208,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductDTO getProductById(Long id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
         return convertToDTO(product);
     }
 
@@ -211,34 +217,34 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public List<ProductDTO> getAllProducts(String search) {
         if(search == null || search.trim().isEmpty()){
-            return productRepository.findAllByIsActiveTrue().stream()
+            return productRepository.findAllByLocal_IdAndIsActiveTrue(localScope.id()).stream()
                     .map(this::convertToDTO)
                     .toList();
         }
-        return productRepository.findBySearch(search).stream().map(this::convertToDTO).toList();
+        return productRepository.searchInLocal(localScope.id(), search).stream().map(this::convertToDTO).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductDTO> getAllProductsPaginated(String search, Pageable pageable) {
         if (search == null || search.trim().isEmpty()) {
-            return productRepository.findAllByIsActiveTrue(pageable).map(this::convertToDTO);
+            return productRepository.findAllByLocal_IdAndIsActiveTrue(localScope.id(), pageable).map(this::convertToDTO);
         } else {
-            return productRepository.findBySearch(search, pageable).map(this::convertToDTO);
+            return productRepository.searchInLocal(localScope.id(), search, pageable).map(this::convertToDTO);
         }
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ProductDTO> getProductsByCategoryId(Long categoryId) {
-        return productRepository.findAllByCategoryIdAndIsActiveTrue(categoryId).stream()
+        return productRepository.findAllByCategoryIdAndLocal_IdAndIsActiveTrue(categoryId, localScope.id()).stream()
                 .map(this::convertToDTO)
                 .toList();
     }
 
     private ProductDTO convertToDTO(Product product) {
         // Cargar variantes del producto con sus imágenes
-        List<ProductVariant> variants = productVariantRepository.findActiveByProductId(product.getId());
+        List<ProductVariant> variants = productVariantRepository.findByProductIdAndProduct_Local_IdAndIsActiveTrue(product.getId(), localScope.id());
         
         List<ProductVariantDTO> variantDTOs = variants.stream()
                 .map(this::convertVariantToDTO)

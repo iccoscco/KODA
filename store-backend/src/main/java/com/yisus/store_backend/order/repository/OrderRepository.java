@@ -12,9 +12,26 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
+    Optional<Order> findByIdAndLocal_Id(Long id, Long localId);
+    List<Order> findByUserAndLocal_Id(User user, Long localId);
+    List<Order> findByStatusAndLocal_Id(Order.OrderStatus status, Long localId);
+    Page<Order> findAllByLocal_Id(Long localId, Pageable pageable);
+
+    @Query("SELECT o FROM Order o WHERE o.local.id = :localId AND (LOWER(o.user.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(o.user.email) LIKE LOWER(CONCAT('%', :search, '%')) OR CAST(o.id AS string) LIKE CONCAT('%', :search, '%'))")
+    List<Order> searchInLocal(@Param("localId") Long localId, @Param("search") String search);
+
+    @Query("SELECT o FROM Order o WHERE o.local.id = :localId AND (LOWER(o.user.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(o.user.email) LIKE LOWER(CONCAT('%', :search, '%')) OR CAST(o.id AS string) LIKE CONCAT('%', :search, '%'))")
+    Page<Order> searchInLocal(@Param("localId") Long localId, @Param("search") String search, Pageable pageable);
+
+    @Query("SELECT o FROM Order o WHERE o.local.id = :localId AND o.id IN (SELECT ci.order.id FROM CashInflow ci WHERE ci.cashOpening.id = :sessionId)")
+    List<Order> findBySessionInLocal(@Param("localId") Long localId, @Param("sessionId") Long sessionId);
+
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.orderItems oi LEFT JOIN FETCH oi.productVariant pv LEFT JOIN FETCH pv.product WHERE o.local.id = :localId")
+    List<Order> findAllWithItemsInLocal(@Param("localId") Long localId);
     
     List<Order> findByUser(User user);
     

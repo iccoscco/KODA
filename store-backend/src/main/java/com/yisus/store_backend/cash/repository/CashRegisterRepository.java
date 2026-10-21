@@ -10,6 +10,10 @@ import java.util.Optional;
 
 @Repository
 public interface CashRegisterRepository extends JpaRepository<CashRegister, Long> {
+    Optional<CashRegister> findByIdAndLocal_Id(Long id, Long localId);
+    List<CashRegister> findAllByLocal_IdOrderByIdAsc(Long localId);
+
+    Optional<CashRegister> findFirstByLocal_IdOrderByIdDesc(Long localId);
 
     List<CashRegister> findAllByOrderByIdAsc();
 

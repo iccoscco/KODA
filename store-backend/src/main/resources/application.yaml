@@ -19,6 +19,11 @@ spring:
     password: ${DB_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
 
+  # El esquema legado aún se crea con Hibernate. Flyway se ejecuta después,
+  # antes de los bootstrap de datos, mediante LocalSchemaMigration.
+  flyway:
+    enabled: false
+
   jpa:
     hibernate:
       ddl-auto: update

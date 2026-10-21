@@ -19,6 +19,8 @@ import com.yisus.store_backend.notification.model.NotificationType;
 import com.yisus.store_backend.notification.service.NotificationService;
 import com.yisus.store_backend.user.model.User;
 import com.yisus.store_backend.user.repository.UserRepository;
+import com.yisus.store_backend.local.service.LocalScope;
+import com.yisus.store_backend.common.exception.ResourceNotFoundException;
 import com.yisus.store_backend.product.service.StockMovementService;
 import com.yisus.store_backend.product.model.StockMovement.MovementType;
 import lombok.RequiredArgsConstructor;
@@ -57,18 +59,21 @@ public class OrderServiceImpl implements OrderService {
     private final CashOpeningRepository cashOpeningRepository;
     private final NotificationService notificationService;
     private final StockMovementService stockMovementService;
+    private final LocalScope localScope;
     
     @Override
     @Transactional
     public OrderDTO createOrder(OrderCreateDTO dto) {
         // Validar usuario
-        User user = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        Long localId = localScope.id();
+        User user = userRepository.findByIdAndLocal_Id(dto.getUserId(), localId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         
         CashRegister cashRegister = resolveCashRegisterForNewOrder(dto.getCashRegisterId());
 
         // Crear orden - Punto de Venta: automáticamente marcada como PAGADA
         Order order = Order.builder()
+                .local(localScope.local())
                 .user(user)
                 .status(Order.OrderStatus.PAID)
                 .total(BigDecimal.ZERO)
@@ -80,8 +85,8 @@ public class OrderServiceImpl implements OrderService {
         // Calcular total y crear items
         BigDecimal total = BigDecimal.ZERO;
         for (OrderItemCreateDTO itemDto : dto.getOrderItems()) {
-            ProductVariant variant = productVariantRepository.findById(itemDto.getProductVariantId())
-                    .orElseThrow(() -> new RuntimeException("Product variant not found"));
+            ProductVariant variant = productVariantRepository.findByIdAndProduct_Local_Id(itemDto.getProductVariantId(), localId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
             
             // Validar stock
             if (variant.getStock() < itemDto.getQuantity()) {
@@ -137,7 +142,7 @@ public class OrderServiceImpl implements OrderService {
                 String message = variantDesc + " — Stock actual: " + newStock
                         + " (mínimo: " + minStock + ")";
                 String link = "/products?search=" + java.net.URLEncoder.encode(product.getName(), java.nio.charset.StandardCharsets.UTF_8);
-                notificationService.createForUsersWithPermission("notifications.read", title, message, notifType, link);
+                notificationService.createForUsersWithPermission(localId, "notifications.read", title, message, notifType, link);
             }
         }
         
@@ -202,8 +207,8 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderDTO updateOrderStatus(Long id, Order.OrderStatus status) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+        Order order = orderRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         
         // Validar transiciones de estado
         validateStatusTransition(order.getStatus(), status);
@@ -277,17 +282,17 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public OrderDTO getOrderById(Long id) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+        Order order = orderRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         return convertToDTO(order);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<OrderDTO> getOrdersByUser(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        List<Order> orders = orderRepository.findByUser(user);
+        User user = userRepository.findByIdAndLocal_Id(userId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        List<Order> orders = orderRepository.findByUserAndLocal_Id(user, localScope.id());
         return orders.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -296,7 +301,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public List<OrderDTO> getOrdersByStatus(Order.OrderStatus status) {
-        List<Order> orders = orderRepository.findByStatus(status);
+        List<Order> orders = orderRepository.findByStatusAndLocal_Id(status, localScope.id());
         return orders.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -306,12 +311,12 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public List<OrderDTO> getAllOrders(String search) {
         if (search == null || search.trim().isEmpty()) {
-            List<Order> orders = orderRepository.findAllWithItems();
+            List<Order> orders = orderRepository.findAllWithItemsInLocal(localScope.id());
             return orders.stream()
                     .map(this::convertToDTO)
                     .collect(Collectors.toList());
         } else {
-            List<Order> orders = orderRepository.findBySearch(search);
+            List<Order> orders = orderRepository.searchInLocal(localScope.id(), search);
             return orders.stream()
                     .map(this::convertToDTO)
                     .collect(Collectors.toList());
@@ -321,7 +326,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public List<OrderDTO> getOrdersByCashSession(Long sessionId) {
-        return orderRepository.findBySessionId(sessionId)
+        return orderRepository.findBySessionInLocal(localScope.id(), sessionId)
                 .stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -331,23 +336,23 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public Page<OrderDTO> getAllOrdersPaginated(String search, Pageable pageable) {
         if (search == null || search.trim().isEmpty()) {
-            return orderRepository.findAll(pageable)
+            return orderRepository.findAllByLocal_Id(localScope.id(), pageable)
                     .map(this::convertToDTO);
         } else {
-            return orderRepository.findBySearch(search, pageable)
+            return orderRepository.searchInLocal(localScope.id(), search, pageable)
                     .map(this::convertToDTO);
         }
     }
     
     private CashRegister resolveCashRegisterForNewOrder(Long cashRegisterId) {
         if (cashRegisterId != null) {
-            CashRegister reg = cashRegisterRepository.findById(cashRegisterId)
-                    .orElseThrow(() -> new RuntimeException("Caja no encontrada"));
-            cashOpeningRepository.findByCashRegisterIdAndIsActiveTrue(reg.getId())
+            CashRegister reg = cashRegisterRepository.findByIdAndLocal_Id(cashRegisterId, localScope.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
+            cashOpeningRepository.findByCashRegisterIdAndCashRegister_Local_IdAndIsActiveTrue(reg.getId(), localScope.id())
                     .orElseThrow(() -> new RuntimeException("La caja seleccionada no tiene una sesión abierta"));
             return reg;
         }
-        List<CashOpening> open = cashOpeningRepository.findAllByIsActiveTrue();
+        List<CashOpening> open = cashOpeningRepository.findAllByCashRegister_Local_IdAndIsActiveTrue(localScope.id());
         if (open.isEmpty()) {
             throw new RuntimeException("No hay ninguna sesión de caja abierta");
         }

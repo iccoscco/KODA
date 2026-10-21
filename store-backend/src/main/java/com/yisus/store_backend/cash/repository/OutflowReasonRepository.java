@@ -9,6 +9,10 @@ import java.util.Optional;
 
 @Repository
 public interface OutflowReasonRepository extends JpaRepository<OutflowReason, Long> {
+    Optional<OutflowReason> findByIdAndLocal_Id(Long id, Long localId);
+    Optional<OutflowReason> findByNameAndLocal_Id(String name, Long localId);
+    boolean existsByNameAndLocal_Id(String name, Long localId);
+    List<OutflowReason> findAllByLocal_IdAndIsActiveTrue(Long localId);
     
     Optional<OutflowReason> findByName(String name);
 

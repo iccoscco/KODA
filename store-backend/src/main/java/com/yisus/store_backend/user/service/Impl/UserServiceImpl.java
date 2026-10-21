@@ -11,6 +11,9 @@ import com.yisus.store_backend.user.dto.UserDTO;
 import com.yisus.store_backend.user.model.User;
 import com.yisus.store_backend.user.repository.UserRepository;
 import com.yisus.store_backend.user.service.UserService;
+import com.yisus.store_backend.local.service.LocalScope;
+import com.yisus.store_backend.common.exception.ResourceNotFoundException;
+import com.yisus.store_backend.common.exception.DuplicateResourceException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +38,7 @@ public class UserServiceImpl implements UserService{
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final LocalScope localScope;
 
     @Override
     @Transactional(readOnly = true)
@@ -50,11 +54,11 @@ public class UserServiceImpl implements UserService{
     @Transactional(readOnly = true)
     public List<UserDTO> getAllUsers(String search) {
         if (search == null || search.trim().isEmpty()) {
-            return userRepository.findAllWithoutSuperAdmin().stream()
+            return userRepository.findActiveInLocal(localScope.id()).stream()
                     .map(this::mapToDTO)
                     .collect(Collectors.toList());
         } else {
-            return userRepository.findBySearchWithoutSuperAdmin(search).stream()
+            return userRepository.searchActiveInLocal(localScope.id(), search).stream()
                     .map(this::mapToDTO)
                     .collect(Collectors.toList());
         }
@@ -63,8 +67,8 @@ public class UserServiceImpl implements UserService{
     @Override
     @Transactional(readOnly = true)
     public UserDTO getUserById(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         return mapToDTO(user);
     }
 
@@ -72,9 +76,9 @@ public class UserServiceImpl implements UserService{
     @Transactional(readOnly = true)
     public Page<UserDTO> getAllUsersPaginated(String search, Pageable pageable) {
         if (search == null || search.trim().isEmpty()) {
-            return userRepository.findAllWithoutSuperAdmin(pageable).map(this::mapToDTO);
+            return userRepository.findActiveInLocal(localScope.id(), pageable).map(this::mapToDTO);
         } else {
-            return userRepository.findBySearchWithoutSuperAdmin(search, pageable).map(this::mapToDTO);
+            return userRepository.searchActiveInLocal(localScope.id(), search, pageable).map(this::mapToDTO);
         }
     }
 
@@ -83,6 +87,9 @@ public class UserServiceImpl implements UserService{
     public UserDTO createUser(CreateUserDTO request){
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new RuntimeException("Role not found"));
+        if ("SUPERADMIN".equals(role.getName())) {
+            throw new IllegalArgumentException("SUPERADMIN requiere un flujo de administración global");
+        }
 
         // Si ya existe un usuario con ese email, decidir según su estado:
         // - Activo   -> duplicado real, rechazar.
@@ -92,6 +99,9 @@ public class UserServiceImpl implements UserService{
         var existingOpt = userRepository.findByEmail(request.getEmail());
         if (existingOpt.isPresent()) {
             User existing = existingOpt.get();
+            if (existing.getLocal() == null || !existing.getLocal().getId().equals(localScope.id())) {
+                throw new DuplicateResourceException("Email already in use");
+            }
             if (Boolean.TRUE.equals(existing.getIsActive())) {
                 throw new RuntimeException("User already exists");
             }
@@ -107,6 +117,7 @@ public class UserServiceImpl implements UserService{
         }
 
         User user = User.builder()
+                .local(localScope.local())
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
@@ -121,8 +132,8 @@ public class UserServiceImpl implements UserService{
     @Override
     @Transactional
     public UserDTO updateUser(Long id, UpdateUserDTO request){
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (request.getName() != null) {
             user.setName(request.getName());
@@ -141,13 +152,16 @@ public class UserServiceImpl implements UserService{
         if (request.getRoleId() != null) {
             Role role = roleRepository.findById(request.getRoleId())
                     .orElseThrow(() -> new RuntimeException("Role not found"));
+            if ("SUPERADMIN".equals(role.getName())) {
+                throw new IllegalArgumentException("SUPERADMIN requiere un flujo de administración global");
+            }
             user.setRole(role);
         }
 
         userRepository.save(user);
         userRepository.flush();
-        User refreshed = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User refreshed = userRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         return mapToDTO(refreshed);
     }
@@ -155,8 +169,8 @@ public class UserServiceImpl implements UserService{
     @Override
     @Transactional
     public void deleteUser(Long id){
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         user.setIsActive(false);
         
         userRepository.save(user);
@@ -166,8 +180,8 @@ public class UserServiceImpl implements UserService{
     @Override
     @Transactional
     public void updateUserStatus(Long id, Boolean isActive){
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         
         // No permitir cambiar el status si el usuario tiene rol SUPERADMIN
         if(user.getRole() != null && "SUPERADMIN".equals(user.getRole().getName())){
@@ -183,8 +197,9 @@ public class UserServiceImpl implements UserService{
     @Override
     @Transactional
     public UserDTO updateProfile(Long userId, UpdateProfileDTO dto) {
+        // El ID proviene de la identidad autenticada, no de un parámetro del cliente.
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         user.setName(dto.getName());
 
@@ -289,8 +304,8 @@ public class UserServiceImpl implements UserService{
     @Override
     @Transactional
     public void adminChangePassword(Long userId, String newPassword) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findByIdAndLocal_Id(userId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setTokenVersion((user.getTokenVersion() == null ? 0L : user.getTokenVersion()) + 1L);
         userRepository.save(user);

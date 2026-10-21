@@ -43,6 +43,9 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeHttpRequests(auth -> auth
+                        // El alta pública legada no asigna local: cerrada hasta que
+                        // Backend 2 implemente invitaciones/alta administrada.
+                        .requestMatchers("/auth/register").denyAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/", "/error", "/favicon.ico").permitAll()

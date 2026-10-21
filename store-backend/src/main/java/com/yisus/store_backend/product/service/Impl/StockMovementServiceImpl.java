@@ -8,6 +8,8 @@ import com.yisus.store_backend.product.repository.StockMovementRepository;
 import com.yisus.store_backend.product.service.StockMovementService;
 import com.yisus.store_backend.user.model.User;
 import com.yisus.store_backend.user.repository.UserRepository;
+import com.yisus.store_backend.local.service.LocalScope;
+import com.yisus.store_backend.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,12 +26,17 @@ public class StockMovementServiceImpl implements StockMovementService {
 
     private final StockMovementRepository stockMovementRepository;
     private final UserRepository userRepository;
+    private final LocalScope localScope;
 
     @Override
     @Transactional
     public void registerMovement(ProductVariant variant, Integer quantity, MovementType type, String reason) {
         if (quantity == null || quantity <= 0) {
             return;
+        }
+        if (variant.getProduct() == null || variant.getProduct().getLocal() == null
+                || !variant.getProduct().getLocal().getId().equals(localScope.id())) {
+            throw new ResourceNotFoundException("Product variant not found");
         }
 
         BigDecimal unitCost = BigDecimal.ZERO;
@@ -59,7 +66,8 @@ public class StockMovementServiceImpl implements StockMovementService {
     @Override
     @Transactional(readOnly = true)
     public List<StockMovementDTO> getMovementsByProductId(Long productId) {
-        List<StockMovement> movements = stockMovementRepository.findByProductVariantProductIdOrderByCreatedAtDesc(productId);
+        List<StockMovement> movements = stockMovementRepository
+                .findByProductVariant_ProductIdAndProductVariant_Product_Local_IdOrderByCreatedAtDesc(productId, localScope.id());
         return movements.stream()
                 .map(this::convertToDTO)
                 .toList();

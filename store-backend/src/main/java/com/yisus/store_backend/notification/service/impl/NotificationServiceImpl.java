@@ -113,8 +113,9 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
-    public void createForUsersWithPermission(String permissionName, String title, String message, NotificationType type, String link) {
-        List<User> users = userRepository.findActiveByRolePermissionName(permissionName);
+    public void createForUsersWithPermission(Long localId, String permissionName, String title, String message,
+                                              NotificationType type, String link) {
+        List<User> users = userRepository.findActiveByRolePermissionNameInLocal(permissionName, localId);
         if (users.isEmpty()) {
             log.warn("No active users with permission '{}'; skipping broadcast: {}", permissionName, title);
             return;

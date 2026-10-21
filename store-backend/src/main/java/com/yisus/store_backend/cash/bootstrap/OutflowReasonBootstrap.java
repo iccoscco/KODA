@@ -3,6 +3,8 @@ package com.yisus.store_backend.cash.bootstrap;
 import com.yisus.store_backend.cash.OutflowReasonConstants;
 import com.yisus.store_backend.cash.model.OutflowReason;
 import com.yisus.store_backend.cash.repository.OutflowReasonRepository;
+import com.yisus.store_backend.local.model.Local;
+import com.yisus.store_backend.local.repository.LocalRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OutflowReasonBootstrap implements ApplicationRunner {
 
     private final OutflowReasonRepository outflowReasonRepository;
+    private final LocalRepository localRepository;
 
     private record Seed(String name, String description, boolean active) {}
 
@@ -42,31 +45,37 @@ public class OutflowReasonBootstrap implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        renameLegacyAutoRefund();
-        for (Seed s : DEFAULT_REASONS) {
-            if (!outflowReasonRepository.existsByName(s.name)) {
-                outflowReasonRepository.save(OutflowReason.builder()
-                        .name(s.name)
-                        .description(s.description)
-                        .isActive(s.active)
-                        .build());
-                log.info("Motivo de egreso inicial creado: {}", s.name);
+        for (Local local : localRepository.findAll()) {
+            if (!Boolean.TRUE.equals(local.getActive())) {
+                continue;
+            }
+            renameLegacyAutoRefund(local);
+            for (Seed s : DEFAULT_REASONS) {
+                if (!outflowReasonRepository.existsByNameAndLocal_Id(s.name, local.getId())) {
+                    outflowReasonRepository.save(OutflowReason.builder()
+                            .local(local)
+                            .name(s.name)
+                            .description(s.description)
+                            .isActive(s.active)
+                            .build());
+                    log.info("Motivo de egreso inicial creado en {}: {}", local.getCode(), s.name);
+                }
             }
         }
     }
 
-    private void renameLegacyAutoRefund() {
-        if (!outflowReasonRepository.existsByName(OutflowReasonConstants.LEGACY_AUTO_REFUND_EN)) {
+    private void renameLegacyAutoRefund(Local local) {
+        if (!outflowReasonRepository.existsByNameAndLocal_Id(OutflowReasonConstants.LEGACY_AUTO_REFUND_EN, local.getId())) {
             return;
         }
-        if (outflowReasonRepository.existsByName(OutflowReasonConstants.AUTO_REFUND)) {
+        if (outflowReasonRepository.existsByNameAndLocal_Id(OutflowReasonConstants.AUTO_REFUND, local.getId())) {
             log.warn(
                     "Existen filas '{}' y '{}'; no se renombra automáticamente.",
                     OutflowReasonConstants.LEGACY_AUTO_REFUND_EN,
                     OutflowReasonConstants.AUTO_REFUND);
             return;
         }
-        outflowReasonRepository.findByName(OutflowReasonConstants.LEGACY_AUTO_REFUND_EN).ifPresent(r -> {
+        outflowReasonRepository.findByNameAndLocal_Id(OutflowReasonConstants.LEGACY_AUTO_REFUND_EN, local.getId()).ifPresent(r -> {
             r.setName(OutflowReasonConstants.AUTO_REFUND);
             r.setDescription("Generado al cancelar un pedido ya pagado (uso del sistema)");
             r.setIsActive(false);

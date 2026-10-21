@@ -14,6 +14,11 @@ import java.util.Optional;
 
 @Repository
 public interface CashOpeningRepository extends JpaRepository<CashOpening, Long> {
+    Optional<CashOpening> findByIdAndCashRegister_Local_Id(Long id, Long localId);
+    Optional<CashOpening> findByCashRegisterIdAndCashRegister_Local_IdAndIsActiveTrue(Long registerId, Long localId);
+    List<CashOpening> findAllByCashRegister_Local_IdAndIsActiveTrue(Long localId);
+    List<CashOpening> findAllByCashRegister_Local_IdOrderByOpenedAtDesc(Long localId);
+    List<CashOpening> findAllByCashRegisterIdAndCashRegister_Local_IdOrderByOpenedAtDesc(Long registerId, Long localId);
 
     Optional<CashOpening> findByCashRegisterIdAndIsActiveTrue(Long cashRegisterId);
 
@@ -27,9 +32,10 @@ public interface CashOpeningRepository extends JpaRepository<CashOpening, Long> 
      * Historial paginado sin texto de búsqueda: no toca {@code cash_register.name} (evita {@code bytea}
      * y bugs de Hibernate con CONCAT en JPQL).
      */
-    @Query("SELECT o FROM CashOpening o JOIN o.cashRegister cr WHERE " +
+    @Query("SELECT o FROM CashOpening o JOIN o.cashRegister cr WHERE cr.local.id = :localId AND " +
             "(:registerId IS NULL OR cr.id = :registerId)")
     Page<CashOpening> findSessionHistoryPaginatedNoSearch(
+            @Param("localId") Long localId,
             @Param("registerId") Long cashRegisterId,
             Pageable pageable);
 
@@ -43,7 +49,8 @@ public interface CashOpeningRepository extends JpaRepository<CashOpening, Long> 
                            co.opened_at, co.closed_at, co.is_active, co.cash_register_id
                     FROM cash_openings co
                     INNER JOIN cash_register cr ON cr.id = co.cash_register_id
-                    WHERE (:registerId IS NULL OR cr.id = :registerId)
+                    WHERE cr.local_id = :localId
+                      AND (:registerId IS NULL OR cr.id = :registerId)
                       AND (:sessionId IS NULL OR co.id = :sessionId)
                       AND (NOT COALESCE(:filterOpenedFrom, false) OR co.opened_at >= :openedFromStart)
                       AND (NOT COALESCE(:filterOpenedTo, false) OR co.opened_at < :openedToEndExclusive)
@@ -67,7 +74,8 @@ public interface CashOpeningRepository extends JpaRepository<CashOpening, Long> 
                     SELECT count(co.id)
                     FROM cash_openings co
                     INNER JOIN cash_register cr ON cr.id = co.cash_register_id
-                    WHERE (:registerId IS NULL OR cr.id = :registerId)
+                    WHERE cr.local_id = :localId
+                      AND (:registerId IS NULL OR cr.id = :registerId)
                       AND (:sessionId IS NULL OR co.id = :sessionId)
                       AND (NOT COALESCE(:filterOpenedFrom, false) OR co.opened_at >= :openedFromStart)
                       AND (NOT COALESCE(:filterOpenedTo, false) OR co.opened_at < :openedToEndExclusive)
@@ -88,6 +96,7 @@ public interface CashOpeningRepository extends JpaRepository<CashOpening, Long> 
                     """,
             nativeQuery = true)
     Page<CashOpening> findSessionHistoryPaginatedFiltered(
+            @Param("localId") Long localId,
             @Param("registerId") Long registerId,
             @Param("sessionId") Long sessionId,
             @Param("filterOpenedFrom") boolean filterOpenedFrom,

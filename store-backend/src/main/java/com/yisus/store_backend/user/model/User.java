@@ -1,6 +1,7 @@
 package com.yisus.store_backend.user.model;
 
 import com.yisus.store_backend.role.model.Role;
+import com.yisus.store_backend.local.model.Local;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -44,6 +45,10 @@ public class User implements UserDetails {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id")
     private Role role;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "local_id")
+    private Local local;
 
     @Column(name = "avatar_url")
     private String avatarUrl;

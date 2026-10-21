@@ -4,6 +4,7 @@ import com.yisus.store_backend.cash.dto.CashRegisterCreateDTO;
 import com.yisus.store_backend.cash.dto.CashRegisterDTO;
 import com.yisus.store_backend.cash.model.CashRegister;
 import com.yisus.store_backend.cash.repository.CashRegisterRepository;
+import com.yisus.store_backend.local.service.LocalScope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,12 +31,13 @@ import java.util.stream.Collectors;
 public class CashRegisterController {
 
     private final CashRegisterRepository cashRegisterRepository;
+    private final LocalScope localScope;
 
     @GetMapping
     @PreAuthorize("hasAuthority('cash.read')")
     @Operation(summary = "Listar cajas")
     public ResponseEntity<List<CashRegisterDTO>> list() {
-        List<CashRegisterDTO> list = cashRegisterRepository.findAllByOrderByIdAsc().stream()
+        List<CashRegisterDTO> list = cashRegisterRepository.findAllByLocal_IdOrderByIdAsc(localScope.id()).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(list);
@@ -46,6 +48,7 @@ public class CashRegisterController {
     @Operation(summary = "Crear caja", description = "Nueva caja con saldo 0; cada cajera abre su sesión sobre una caja.")
     public ResponseEntity<CashRegisterDTO> create(@Valid @RequestBody CashRegisterCreateDTO body) {
         CashRegister saved = cashRegisterRepository.save(CashRegister.builder()
+                .local(localScope.local())
                 .name(body.getName().trim())
                 .balance(BigDecimal.ZERO)
                 .build());

@@ -14,6 +14,19 @@ import java.util.Optional;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
+    Optional<Product> findByIdAndLocal_Id(Long id, Long localId);
+    Optional<Product> findByNameAndLocal_Id(String name, Long localId);
+    List<Product> findAllByLocal_IdAndIsActiveTrue(Long localId);
+    Page<Product> findAllByLocal_IdAndIsActiveTrue(Long localId, Pageable pageable);
+    List<Product> findAllByCategoryIdAndLocal_IdAndIsActiveTrue(Long categoryId, Long localId);
+
+    @Query("SELECT p FROM Product p WHERE p.local.id = :localId AND p.isActive = true AND LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))")
+    List<Product> searchInLocal(@Param("localId") Long localId, @Param("search") String search);
+
+    @Query("SELECT p FROM Product p WHERE p.local.id = :localId AND p.isActive = true AND LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))")
+    Page<Product> searchInLocal(@Param("localId") Long localId, @Param("search") String search, Pageable pageable);
+
+    long countByCategory_IdAndLocal_IdAndIsActiveTrue(Long categoryId, Long localId);
 
     Optional<Product> findByName(String name);
 

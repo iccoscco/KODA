@@ -7,6 +7,8 @@ import com.yisus.store_backend.cash.repository.*;
 import com.yisus.store_backend.cash.service.CashService;
 import com.yisus.store_backend.order.model.Order;
 import com.yisus.store_backend.order.repository.OrderRepository;
+import com.yisus.store_backend.local.service.LocalScope;
+import com.yisus.store_backend.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -33,12 +35,13 @@ public class CashServiceImpl implements CashService {
     private final OutflowReasonRepository outflowReasonRepository;
     private final OrderRepository orderRepository;
     private final CashOpeningRepository cashOpeningRepository;
+    private final LocalScope localScope;
 
     @Override
     @Transactional(readOnly = true)
     public CashRegisterDTO getCurrentBalance(Long registerId) {
-        CashRegister cashRegister = cashRegisterRepository.findById(registerId)
-                .orElseThrow(() -> new RuntimeException("Caja no encontrada"));
+        CashRegister cashRegister = cashRegisterRepository.findByIdAndLocal_Id(registerId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
         return convertToDTO(cashRegister);
     }
 
@@ -49,15 +52,15 @@ public class CashServiceImpl implements CashService {
             throw new RuntimeException("Adjustment amount must be positive");
         }
         updateCashRegisterBalance(registerId, adjustment, isInflow);
-        CashRegister cashRegister = cashRegisterRepository.findById(registerId)
-                .orElseThrow(() -> new RuntimeException("Caja no encontrada"));
+        CashRegister cashRegister = cashRegisterRepository.findByIdAndLocal_Id(registerId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
         return convertToDTO(cashRegister);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<CashInflowDTO> getAllInflows() {
-        List<CashInflow> inflows = cashInflowRepository.findAll();
+        List<CashInflow> inflows = cashInflowRepository.findAllByLocal_Id(localScope.id());
         return inflows.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -66,14 +69,14 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public Page<CashInflowDTO> getAllInflowsPaginated(Pageable pageable) {
-        return cashInflowRepository.findAll(pageable)
+        return cashInflowRepository.findAllByLocal_Id(localScope.id(), pageable)
                 .map(this::convertToDTO);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<CashInflowDTO> getInflowsByDateRange(LocalDateTime startDate, LocalDateTime endDate) {
-        List<CashInflow> inflows = cashInflowRepository.findByDateRange(startDate, endDate);
+        List<CashInflow> inflows = cashInflowRepository.findByDateRangeInLocal(localScope.id(), startDate, endDate);
         return inflows.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -82,8 +85,8 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional
     public CashInflowDTO createInflowFromOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+        Order order = orderRepository.findByIdAndLocal_Id(orderId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         
         // Verificar que la orden esté pagada
         if (order.getStatus() != Order.OrderStatus.PAID && 
@@ -100,13 +103,14 @@ public class CashServiceImpl implements CashService {
         
         CashRegister reg = order.getCashRegister();
         if (reg == null) {
-            reg = cashRegisterRepository.findCurrentRegister()
+            reg = cashRegisterRepository.findFirstByLocal_IdOrderByIdDesc(localScope.id())
                     .orElseThrow(() -> new RuntimeException("No hay caja asociada a la venta ni caja por defecto"));
         }
         Long registerId = reg.getId();
-        CashOpening session = cashOpeningRepository.findByCashRegisterIdAndIsActiveTrue(registerId).orElse(null);
+        CashOpening session = cashOpeningRepository.findByCashRegisterIdAndCashRegister_Local_IdAndIsActiveTrue(registerId, localScope.id()).orElse(null);
 
         CashInflow inflow = CashInflow.builder()
+                .local(localScope.local())
                 .order(order)
                 .amount(order.getTotal())
                 .description("Sale order #" + order.getId())
@@ -128,7 +132,7 @@ public class CashServiceImpl implements CashService {
         // - Activo   -> duplicado real, rechazar.
         // - Inactivo (soft-deleted) -> reactivar con los nuevos datos para
         //   evitar chocar con la restricción UNIQUE en la columna name.
-        var existingOpt = outflowReasonRepository.findByName(dto.getName());
+        var existingOpt = outflowReasonRepository.findByNameAndLocal_Id(dto.getName(), localScope.id());
         if (existingOpt.isPresent()) {
             OutflowReason existing = existingOpt.get();
             if (Boolean.TRUE.equals(existing.getIsActive())) {
@@ -142,6 +146,7 @@ public class CashServiceImpl implements CashService {
         }
 
         OutflowReason reason = OutflowReason.builder()
+                .local(localScope.local())
                 .name(dto.getName())
                 .description(dto.getDescription())
                 .build();
@@ -154,7 +159,7 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public List<OutflowReasonDTO> getAllOutflowReasons() {
-        List<OutflowReason> reasons = outflowReasonRepository.findAllByIsActiveTrue();
+        List<OutflowReason> reasons = outflowReasonRepository.findAllByLocal_IdAndIsActiveTrue(localScope.id());
         return reasons.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -163,8 +168,8 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional
     public void deleteOutflowReason(Long id) {
-        OutflowReason reason = outflowReasonRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Outflow reason not found"));
+        OutflowReason reason = outflowReasonRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Outflow reason not found"));
         reason.setIsActive(false);
         outflowReasonRepository.save(reason);
     }
@@ -173,25 +178,26 @@ public class CashServiceImpl implements CashService {
     @Transactional
     public CashOutflowDTO createOutflow(CashOutflowCreateDTO dto) {
         Long registerId = dto.getCashRegisterId();
-        CashRegister register = cashRegisterRepository.findById(registerId)
-                .orElseThrow(() -> new RuntimeException("Caja no encontrada"));
+        CashRegister register = cashRegisterRepository.findByIdAndLocal_Id(registerId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
         BigDecimal currentBalance = register.getBalance();
         if (currentBalance.compareTo(dto.getAmount()) < 0) {
             throw new RuntimeException("Insufficient cash balance");
         }
 
-        OutflowReason reason = outflowReasonRepository.findById(dto.getReasonId())
-                .orElseThrow(() -> new RuntimeException("Outflow reason not found"));
+        OutflowReason reason = outflowReasonRepository.findByIdAndLocal_Id(dto.getReasonId(), localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Outflow reason not found"));
 
         Order order = null;
         if (dto.getOrderId() != null) {
-            order = orderRepository.findById(dto.getOrderId())
-                    .orElseThrow(() -> new RuntimeException("Order not found"));
+            order = orderRepository.findByIdAndLocal_Id(dto.getOrderId(), localScope.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         }
 
-        CashOpening session = cashOpeningRepository.findByCashRegisterIdAndIsActiveTrue(registerId).orElse(null);
+        CashOpening session = cashOpeningRepository.findByCashRegisterIdAndCashRegister_Local_IdAndIsActiveTrue(registerId, localScope.id()).orElse(null);
 
         CashOutflow outflow = CashOutflow.builder()
+                .local(localScope.local())
                 .order(order)
                 .reason(reason)
                 .amount(dto.getAmount())
@@ -210,7 +216,7 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public List<CashOutflowDTO> getAllOutflows() {
-        List<CashOutflow> outflows = cashOutflowRepository.findAll();
+        List<CashOutflow> outflows = cashOutflowRepository.findAllByLocal_Id(localScope.id());
         return outflows.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -219,14 +225,14 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public Page<CashOutflowDTO> getAllOutflowsPaginated(Pageable pageable) {
-        return cashOutflowRepository.findAll(pageable)
+        return cashOutflowRepository.findAllByLocal_Id(localScope.id(), pageable)
                 .map(this::convertToDTO);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<CashOutflowDTO> getOutflowsByDateRange(LocalDateTime startDate, LocalDateTime endDate) {
-        List<CashOutflow> outflows = cashOutflowRepository.findByDateRange(startDate, endDate);
+        List<CashOutflow> outflows = cashOutflowRepository.findByDateRangeInLocal(localScope.id(), startDate, endDate);
         return outflows.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -235,7 +241,7 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public List<CashOutflowDTO> getOutflowsBySession(Long sessionId) {
-        return cashOutflowRepository.findBySessionId(sessionId)
+        return cashOutflowRepository.findByCashOpeningIdAndLocal_Id(sessionId, localScope.id())
                 .stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -244,8 +250,8 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional
     public void deleteOutflow(Long id) {
-        CashOutflow outflow = cashOutflowRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Cash outflow not found"));
+        CashOutflow outflow = cashOutflowRepository.findByIdAndLocal_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Cash outflow not found"));
         
         Long registerId = resolveRegisterIdForOutflow(outflow);
         updateCashRegisterBalance(registerId, outflow.getAmount(), true);
@@ -256,12 +262,13 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional
     public void createRefundFromOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+        Order order = orderRepository.findByIdAndLocal_Id(orderId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         
-        OutflowReason refundReason = outflowReasonRepository.findByName(OutflowReasonConstants.AUTO_REFUND)
-                .or(() -> outflowReasonRepository.findByName(OutflowReasonConstants.LEGACY_AUTO_REFUND_EN))
+        OutflowReason refundReason = outflowReasonRepository.findByNameAndLocal_Id(OutflowReasonConstants.AUTO_REFUND, localScope.id())
+                .or(() -> outflowReasonRepository.findByNameAndLocal_Id(OutflowReasonConstants.LEGACY_AUTO_REFUND_EN, localScope.id()))
                 .orElseGet(() -> outflowReasonRepository.save(OutflowReason.builder()
+                        .local(localScope.local())
                         .name(OutflowReasonConstants.AUTO_REFUND)
                         .description("Generado al cancelar un pedido ya pagado (uso del sistema)")
                         .isActive(false)
@@ -269,20 +276,21 @@ public class CashServiceImpl implements CashService {
         
         CashRegister reg = order.getCashRegister();
         if (reg == null) {
-            reg = cashRegisterRepository.findCurrentRegister()
+            reg = cashRegisterRepository.findFirstByLocal_IdOrderByIdDesc(localScope.id())
                     .orElseThrow(() -> new RuntimeException("No hay caja asociada al pedido para reembolsar"));
         }
         Long registerId = reg.getId();
-        CashRegister currentRegister = cashRegisterRepository.findById(registerId)
-                .orElseThrow(() -> new RuntimeException("Caja no encontrada"));
+        CashRegister currentRegister = cashRegisterRepository.findByIdAndLocal_Id(registerId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
 
         if (currentRegister.getBalance().compareTo(order.getTotal()) < 0) {
             throw new RuntimeException("Insufficient cash balance to process refund");
         }
 
-        CashOpening session = cashOpeningRepository.findByCashRegisterIdAndIsActiveTrue(registerId).orElse(null);
+        CashOpening session = cashOpeningRepository.findByCashRegisterIdAndCashRegister_Local_IdAndIsActiveTrue(registerId, localScope.id()).orElse(null);
 
         CashOutflow outflow = CashOutflow.builder()
+                .local(localScope.local())
                 .order(order)
                 .reason(refundReason)
                 .amount(order.getTotal())
@@ -299,19 +307,18 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public BigDecimal getTotalInflows(LocalDateTime startDate, LocalDateTime endDate) {
-        Double total = cashInflowRepository.sumAmountByDateRange(startDate, endDate);
-        return total != null ? BigDecimal.valueOf(total) : BigDecimal.ZERO;
+        return cashInflowRepository.sumAmountByDateRangeInLocal(localScope.id(), startDate, endDate);
     }
     
     @Override
     @Transactional(readOnly = true)
     public BigDecimal getTotalOutflows(LocalDateTime startDate, LocalDateTime endDate) {
-        Double total = cashOutflowRepository.sumAmountByDateRange(startDate, endDate);
-        return total != null ? BigDecimal.valueOf(total) : BigDecimal.ZERO;
+        return cashOutflowRepository.sumAmountByDateRangeInLocal(localScope.id(), startDate, endDate);
     }
     
     private CashRegister createInitialCashRegister() {
         CashRegister cashRegister = CashRegister.builder()
+                .local(localScope.local())
                 .name("Caja principal")
                 .balance(BigDecimal.ZERO)
                 .build();
@@ -319,8 +326,8 @@ public class CashServiceImpl implements CashService {
     }
 
     private void updateCashRegisterBalance(Long registerId, BigDecimal amount, boolean isInflow) {
-        CashRegister cashRegister = cashRegisterRepository.findById(registerId)
-                .orElseThrow(() -> new RuntimeException("Caja no encontrada"));
+        CashRegister cashRegister = cashRegisterRepository.findByIdAndLocal_Id(registerId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
 
         BigDecimal newBalance = isInflow
                 ? cashRegister.getBalance().add(amount)
@@ -339,7 +346,7 @@ public class CashServiceImpl implements CashService {
         if (outflow.getCashOpening() != null && outflow.getCashOpening().getCashRegister() != null) {
             return outflow.getCashOpening().getCashRegister().getId();
         }
-        return cashRegisterRepository.findCurrentRegister()
+        return cashRegisterRepository.findFirstByLocal_IdOrderByIdDesc(localScope.id())
                 .map(CashRegister::getId)
                 .orElseThrow(() -> new RuntimeException("No se pudo determinar la caja del egreso"));
     }

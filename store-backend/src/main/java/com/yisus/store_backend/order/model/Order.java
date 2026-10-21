@@ -2,6 +2,7 @@ package com.yisus.store_backend.order.model;
 
 import com.yisus.store_backend.cash.model.CashRegister;
 import com.yisus.store_backend.user.model.User;
+import com.yisus.store_backend.local.model.Local;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,6 +29,10 @@ public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "local_id")
+    private Local local;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

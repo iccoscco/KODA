@@ -1,6 +1,8 @@
 package com.yisus.store_backend.product.service.Impl;
 
 import com.yisus.store_backend.common.exception.DuplicateResourceException;
+import com.yisus.store_backend.common.exception.ResourceNotFoundException;
+import com.yisus.store_backend.local.service.LocalScope;
 import com.yisus.store_backend.product.dto.ProductVariantCreateDTO;
 import com.yisus.store_backend.product.dto.ProductVariantDTO;
 import com.yisus.store_backend.product.dto.ProductVariantUpdateDTO;
@@ -42,12 +44,13 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     private final SizeRepository sizeRepository;
     private final ProductImageRepository productImageRepository;
     private final StockMovementService stockMovementService;
+    private final LocalScope localScope;
     
     @Override
     @Transactional
     public ProductVariantDTO createProductVariant(ProductVariantCreateDTO dto) {
-        Product product = productRepository.findById(dto.getProductId())
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndLocal_Id(dto.getProductId(), localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         Color color = null;
         if (dto.getColorId() != null) {
@@ -70,12 +73,13 @@ public class ProductVariantServiceImpl implements ProductVariantService {
             throw new DuplicateResourceException("Ya existe una variante activa con esa combinación de color y talla");
         }
 
-        if (dto.getSku() != null && productVariantRepository.existsBySku(dto.getSku())) {
-            throw new RuntimeException("SKU already exists");
+        if (dto.getSku() != null && productVariantRepository.existsBySkuAndProduct_Local_Id(dto.getSku(), localScope.id())) {
+            throw new DuplicateResourceException("SKU already exists in this local");
         }
 
         ProductVariant variant = ProductVariant.builder()
                 .product(product)
+                .local(product.getLocal())
                 .color(color)
                 .size(size)
                 .stock(dto.getStock() != null ? dto.getStock() : 0)
@@ -96,8 +100,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     @Override
     @Transactional
     public ProductVariantDTO updateProductVariant(Long id, ProductVariantUpdateDTO dto) {
-        ProductVariant variant = productVariantRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product variant not found"));
+        ProductVariant variant = productVariantRepository.findByIdAndProduct_Local_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
 
         // Validar combinación única en variantes del mismo producto
         Optional<ProductVariant> duplicateOpt = productVariantRepository
@@ -131,8 +135,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
 
         if (dto.getSku() != null) {
             if (!dto.getSku().equals(variant.getSku()) && 
-                productVariantRepository.existsBySku(dto.getSku())) {
-                throw new RuntimeException("SKU already exists");
+                productVariantRepository.existsBySkuAndProduct_Local_Id(dto.getSku(), localScope.id())) {
+                throw new DuplicateResourceException("SKU already exists in this local");
             }
             variant.setSku(dto.getSku());
         }
@@ -169,8 +173,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     @Override
     @Transactional
     public void deleteProductVariant(Long id) {
-        ProductVariant variant = productVariantRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product variant not found"));
+        ProductVariant variant = productVariantRepository.findByIdAndProduct_Local_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
         variant.setIsActive(false);
         productVariantRepository.save(variant);
     }
@@ -178,15 +182,15 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     @Override
     @Transactional(readOnly = true)
     public ProductVariantDTO getProductVariantById(Long id) {
-        ProductVariant variant = productVariantRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product variant not found"));
+        ProductVariant variant = productVariantRepository.findByIdAndProduct_Local_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
         return convertToDTO(variant);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<ProductVariantDTO> getProductVariantsByProductId(Long productId) {
-        List<ProductVariant> variants = productVariantRepository.findActiveByProductId(productId);
+        List<ProductVariant> variants = productVariantRepository.findByProductIdAndProduct_Local_IdAndIsActiveTrue(productId, localScope.id());
         return variants.stream()
                 .map(this::convertToDTO)
                 .toList();
@@ -195,7 +199,7 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     @Override
     @Transactional(readOnly = true)
     public List<ProductVariantDTO> getLowStockVariants(Integer minStock) {
-        List<ProductVariant> variants = productVariantRepository.findLowStock(minStock);
+        List<ProductVariant> variants = productVariantRepository.findLowStockInLocal(localScope.id(), minStock);
         return variants.stream()
                 .map(this::convertToDTO)
                 .toList();
@@ -208,8 +212,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
             throw new RuntimeException("Stock cannot be negative");
         }
         
-        ProductVariant variant = productVariantRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product variant not found"));
+        ProductVariant variant = productVariantRepository.findByIdAndProduct_Local_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
         
         int oldStock = variant.getStock();
         if (newStock != oldStock) {
@@ -230,8 +234,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
             throw new RuntimeException("Quantity must be positive");
         }
         
-        ProductVariant variant = productVariantRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product variant not found"));
+        ProductVariant variant = productVariantRepository.findByIdAndProduct_Local_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
         
         variant.setStock(variant.getStock() + quantity);
         stockMovementService.registerMovement(variant, quantity, MovementType.INPUT, "MANUAL_ADD");
@@ -247,8 +251,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
             throw new RuntimeException("Quantity must be positive");
         }
         
-        ProductVariant variant = productVariantRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product variant not found"));
+        ProductVariant variant = productVariantRepository.findByIdAndProduct_Local_Id(id, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
         
         if (variant.getStock() < quantity) {
             throw new RuntimeException("Insufficient stock");
@@ -297,8 +301,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     @Override
     @Transactional
     public ProductVariantDTO uploadImages(Long variantId, MultipartFile[] files) {
-        ProductVariant variant = productVariantRepository.findById(variantId)
-                .orElseThrow(() -> new RuntimeException("Product variant not found"));
+        ProductVariant variant = productVariantRepository.findByIdAndProduct_Local_Id(variantId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
 
         if(files == null || files.length == 0) return convertToDTO(variant);
 
@@ -336,7 +340,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
             }
             productImageRepository.flush();
 
-            ProductVariant refreshedVariant = productVariantRepository.findById(variantId).get();
+            ProductVariant refreshedVariant = productVariantRepository.findByIdAndProduct_Local_Id(variantId, localScope.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
             return convertToDTO(refreshedVariant);
 
         } catch (Exception e) {
@@ -381,8 +386,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     @Override
     @Transactional
     public void deleteProductImage(Long imageId) {
-        ProductImage image = productImageRepository.findById(imageId)
-                .orElseThrow(() -> new RuntimeException("Image not found"));
+        ProductImage image = productImageRepository.findByIdAndProductVariant_Product_Local_Id(imageId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Image not found"));
         
         // Physical deletion
         try {
@@ -415,8 +420,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     @Override
     @Transactional
     public ProductVariantDTO setMainProductImage(Long imageId) {
-        ProductImage chosen = productImageRepository.findById(imageId)
-                .orElseThrow(() -> new RuntimeException("Image not found"));
+        ProductImage chosen = productImageRepository.findByIdAndProductVariant_Product_Local_Id(imageId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Image not found"));
         Long variantId = chosen.getProductVariant().getId();
         List<ProductImage> all = productImageRepository.findByProductVariantIdOrderByIsMainDesc(variantId);
         for (ProductImage img : all) {
@@ -427,8 +432,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
         }
         productImageRepository.saveAll(all);
         productImageRepository.flush();
-        ProductVariant refreshed = productVariantRepository.findById(variantId)
-                .orElseThrow(() -> new RuntimeException("Product variant not found"));
+        ProductVariant refreshed = productVariantRepository.findByIdAndProduct_Local_Id(variantId, localScope.id())
+                .orElseThrow(() -> new ResourceNotFoundException("Product variant not found"));
         return convertToDTO(refreshed);
     }
 }

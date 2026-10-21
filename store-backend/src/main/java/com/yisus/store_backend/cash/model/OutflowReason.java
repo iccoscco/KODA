@@ -1,5 +1,7 @@
 package com.yisus.store_backend.cash.model;
 
+import com.yisus.store_backend.local.model.Local;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +23,11 @@ public class OutflowReason {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "local_id")
+    private Local local;
+
+    @Column(nullable = false)
     private String name;
 
     @Column

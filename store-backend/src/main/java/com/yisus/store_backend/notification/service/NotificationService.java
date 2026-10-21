@@ -35,5 +35,6 @@ public interface NotificationService {
     void createForAllUsers(String title, String message, NotificationType type, String link);
 
     /** Crear la misma notificación para todos los usuarios activos que tengan el permiso (p. ej. {@code notifications.read}). */
-    void createForUsersWithPermission(String permissionName, String title, String message, NotificationType type, String link);
+    void createForUsersWithPermission(Long localId, String permissionName, String title, String message,
+                                      NotificationType type, String link);
 }

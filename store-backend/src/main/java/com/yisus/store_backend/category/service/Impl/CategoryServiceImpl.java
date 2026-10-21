@@ -10,6 +10,7 @@ import com.yisus.store_backend.product.repository.ProductRepository;
 import com.yisus.store_backend.product.repository.ProductVariantRepository;
 import com.yisus.store_backend.common.exception.DuplicateResourceException;
 import com.yisus.store_backend.common.exception.ResourceNotFoundException;
+import com.yisus.store_backend.local.service.LocalScope;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
+    private final LocalScope localScope;
 
     @Override
     @Transactional
@@ -37,7 +39,7 @@ public class CategoryServiceImpl implements CategoryService {
         // - Activa   -> duplicado real, rechazar.
         // - Inactiva (soft-deleted) -> reactivar con los nuevos datos para evitar
         //   chocar con la restricción UNIQUE en la columna name.
-        var existingOpt = categoryRepository.findByName(request.getName());
+        var existingOpt = categoryRepository.findByNameAndLocal_Id(request.getName(), localScope.id());
         if (existingOpt.isPresent()) {
             Category existing = existingOpt.get();
             if (Boolean.TRUE.equals(existing.getIsActive())) {
@@ -54,6 +56,7 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         Category category = Category.builder()
+                .local(localScope.local())
                 .name(request.getName())
                 .description(request.getDescription())
                 .isActive(true)
@@ -67,10 +70,10 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public CategoryDTO updateCategory(Long id, CategoryUpdateDTO request) {
-        Category category = categoryRepository.findById(id)
+        Category category = categoryRepository.findByIdAndLocal_Id(id, localScope.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
 
-        categoryRepository.findByName(request.getName())
+        categoryRepository.findByNameAndLocal_Id(request.getName(), localScope.id())
                 .ifPresent(existing -> {
                     if (!existing.getId().equals(id)) {
                         throw new DuplicateResourceException("Category '" + request.getName() + "' already exists");
@@ -81,12 +84,12 @@ public class CategoryServiceImpl implements CategoryService {
         category.setDescription(request.getDescription());
         categoryRepository.save(category);
         categoryRepository.flush();
-        Category refreshed = categoryRepository.findById(id)
+        Category refreshed = categoryRepository.findByIdAndLocal_Id(id, localScope.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
         long catId = refreshed.getId();
         return convertToDTO(
                 refreshed,
-                productRepository.countByCategory_IdAndIsActiveTrue(catId),
+                productRepository.countByCategory_IdAndLocal_IdAndIsActiveTrue(catId, localScope.id()),
                 productVariantRepository.countByProductCategoryId(catId),
                 productVariantRepository.sumStockByProductCategoryId(catId));
     }
@@ -94,10 +97,10 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public void deleteCategory(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = categoryRepository.findByIdAndLocal_Id(id, localScope.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
 
-        long activeProducts = productRepository.countByCategory_IdAndIsActiveTrue(id);
+        long activeProducts = productRepository.countByCategory_IdAndLocal_IdAndIsActiveTrue(id, localScope.id());
         if (activeProducts > 0) {
             throw new IllegalStateException(
                 "No se puede eliminar la categoría '" + category.getName() + "' porque tiene " +
@@ -113,7 +116,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public void updateStatus(Long id, Boolean isActive) {
-        Category category = categoryRepository.findById(id)
+        Category category = categoryRepository.findByIdAndLocal_Id(id, localScope.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
         category.setIsActive(isActive);
         categoryRepository.save(category);
@@ -122,12 +125,12 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional(readOnly = true)
     public CategoryDTO getCategoryById(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = categoryRepository.findByIdAndLocal_Id(id, localScope.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
         long catId = category.getId();
         return convertToDTO(
                 category,
-                productRepository.countByCategory_IdAndIsActiveTrue(catId),
+                productRepository.countByCategory_IdAndLocal_IdAndIsActiveTrue(catId, localScope.id()),
                 productVariantRepository.countByProductCategoryId(catId),
                 productVariantRepository.sumStockByProductCategoryId(catId));
     }
@@ -136,7 +139,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Transactional(readOnly = true)
     public List<CategoryDTO> getAllCategories(String search){
         if(search == null || search.trim().isEmpty()){
-            List<Category> categories = categoryRepository.findAllByIsActiveTrue();
+            List<Category> categories = categoryRepository.findAllByLocal_IdAndIsActiveTrue(localScope.id());
             List<Long> ids = categories.stream().map(Category::getId).toList();
             Map<Long, Long> productCounts = productCountsByCategoryIds(ids);
             Map<Long, VariantTotals> variantTotals = variantTotalsByCategoryIds(ids);
@@ -151,7 +154,7 @@ public class CategoryServiceImpl implements CategoryService {
                     })
                     .toList();
         }
-        List<Category> categories = categoryRepository.findBySearch(search);
+        List<Category> categories = categoryRepository.searchInLocal(localScope.id(), search);
         List<Long> ids = categories.stream().map(Category::getId).toList();
         Map<Long, Long> productCounts = productCountsByCategoryIds(ids);
         Map<Long, VariantTotals> variantTotals = variantTotalsByCategoryIds(ids);
@@ -171,8 +174,8 @@ public class CategoryServiceImpl implements CategoryService {
     @Transactional(readOnly = true)
     public Page<CategoryDTO> getAllCategoriesPaginated(String search, Pageable pageable) {
         Page<Category> page = (search == null || search.trim().isEmpty())
-                ? categoryRepository.findAllByIsActiveTrue(pageable)
-                : categoryRepository.findBySearch(search, pageable);
+                ? categoryRepository.findAllByLocal_IdAndIsActiveTrue(localScope.id(), pageable)
+                : categoryRepository.searchInLocal(localScope.id(), search, pageable);
         List<Long> ids = page.getContent().stream().map(Category::getId).toList();
         Map<Long, Long> productCounts = productCountsByCategoryIds(ids);
         Map<Long, VariantTotals> variantTotals = variantTotalsByCategoryIds(ids);
