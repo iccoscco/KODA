@@ -58,6 +58,7 @@ public class AuthService {
         return new AuthSessionResult(userDTO, accessToken, refreshToken);
     }
 
+    @Transactional(readOnly = true)
     public AuthSessionResult login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -86,6 +87,7 @@ public class AuthService {
      * (access + refresh) y añade ambos tokens anteriores a la blacklist para
      * que no puedan volver a usarse aunque aún no hayan expirado.
      */
+    @Transactional(readOnly = true)
     public AuthSessionResult refreshToken(String refreshToken, String oldAccessToken) {
         if (tokenBlacklistService.isTokenBlacklisted(refreshToken)) {
             throw new BadCredentialsException("Refresh token has been revoked");
@@ -123,6 +125,7 @@ public class AuthService {
         }
     }
 
+    @Transactional(readOnly = true)
     public UserDTO getCurrentUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         User user = userRepository.findByEmail(email)

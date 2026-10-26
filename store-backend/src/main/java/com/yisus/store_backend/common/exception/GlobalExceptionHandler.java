@@ -26,8 +26,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleResponseStatus(
             ResponseStatusException ex, HttpServletRequest request) {
-        return buildResponse(HttpStatus.valueOf(ex.getStatusCode().value()),
+        Map<String, Object> body = buildBody(HttpStatus.valueOf(ex.getStatusCode().value()),
                 ex.getReason(), request.getRequestURI());
+        if ("LOCAL_REQUIRED".equals(ex.getReason())) {
+            body.put("code", "LOCAL_REQUIRED");
+        }
+        return ResponseEntity.status(ex.getStatusCode()).body(body);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
@@ -86,13 +90,17 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<Map<String, Object>> buildResponse(
             HttpStatus status, String message, String path) {
+        return ResponseEntity.status(status).body(buildBody(status, message, path));
+    }
+
+    private Map<String, Object> buildBody(HttpStatus status, String message, String path) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", LocalDateTime.now().toString());
         body.put("status", status.value());
         body.put("error", status.getReasonPhrase());
         body.put("message", sanitize(message));
         body.put("path", sanitize(path));
-        return ResponseEntity.status(status).body(body);
+        return body;
     }
 
     @ExceptionHandler(DisabledException.class)

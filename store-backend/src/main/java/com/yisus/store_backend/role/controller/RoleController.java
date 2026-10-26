@@ -42,7 +42,7 @@ public class RoleController {
     private final RoleService roleService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('roles.create')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('roles.create')")
     @Operation(summary = "Create a new role", description = "Create a new role in the system")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Role created successfully",
@@ -60,7 +60,7 @@ public class RoleController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('roles.update')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('roles.update')")
     @Operation(
             summary = "Update a role by ID",
             description = "Update a role in the system by its ID"
@@ -83,7 +83,7 @@ public class RoleController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('roles.delete')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('roles.delete')")
     @Operation(summary = "Delete a role by ID", description = "Delete a role in the system by its ID")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Role deleted successfully",
@@ -101,7 +101,7 @@ public class RoleController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAuthority('roles.update')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('roles.update')")
     @Operation(summary = "Update role status", description = "Updates the status of a role (activate/deactivate)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Role status updated successfully",

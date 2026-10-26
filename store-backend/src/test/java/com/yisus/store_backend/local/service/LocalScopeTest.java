@@ -58,6 +58,16 @@ class LocalScopeTest {
     }
 
     @Test
+    void ordinaryUserMayEchoOnlyTheirAssignedLocal() {
+        authenticate("USER");
+        request.addHeader("X-Local-Id", "1");
+        when(users.findLocalIdById(7L)).thenReturn(Optional.of(1L));
+        when(locals.findById(1L)).thenReturn(Optional.of(local(1L, true)));
+
+        assertEquals(1L, scope.id());
+    }
+
+    @Test
     void superAdminMustSelectLocal() {
         authenticate("SUPERADMIN");
         ResponseStatusException error = assertThrows(ResponseStatusException.class, scope::id);

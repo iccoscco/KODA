@@ -14,10 +14,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * Contexto mínimo para consultas de Backend 1. Backend 2 podrá ampliarlo para
- * cubrir todos los endpoints; nunca se confía en un local_id enviado en DTOs.
- */
+/** Resuelve el único local autorizado para una petición operativa. */
 @Service
 @RequiredArgsConstructor
 public class LocalScope {
@@ -25,21 +22,30 @@ public class LocalScope {
     private final UserRepository userRepository;
 
     public Long id() {
+        return local().getId();
+    }
+
+    public Local local() {
         User actor = actor();
         String header = request().getHeader("X-Local-Id");
-        boolean superAdmin = actor.getRole() != null && "SUPERADMIN".equals(actor.getRole().getName());
-        if (!superAdmin) {
-            if (header != null && !header.isBlank()) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No se puede cambiar de local");
-            }
+        if (!canSwitch(actor)) {
             Long assigned = userRepository.findLocalIdById(actor.getId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuario sin local asignado"));
+            if (header != null && !header.isBlank()) {
+                try {
+                    if (Long.parseLong(header) != assigned) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No se puede cambiar de local");
+                    }
+                } catch (NumberFormatException ex) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No se puede cambiar de local");
+                }
+            }
             Local local = localRepository.findById(assigned)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Local inexistente"));
             if (!Boolean.TRUE.equals(local.getActive())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Local inactivo");
             }
-            return assigned;
+            return local;
         }
         if (header == null || header.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "LOCAL_REQUIRED");
@@ -55,12 +61,15 @@ public class LocalScope {
         if (!Boolean.TRUE.equals(local.getActive())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Local inactivo");
         }
-        return local.getId();
+        return local;
     }
 
-    public Local local() {
-        return localRepository.findById(id())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Local inexistente"));
+    public boolean canSwitch() {
+        return canSwitch(actor());
+    }
+
+    private boolean canSwitch(User actor) {
+        return actor.getRole() != null && "SUPERADMIN".equals(actor.getRole().getName());
     }
 
     private User actor() {

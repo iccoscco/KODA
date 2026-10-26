@@ -9,30 +9,31 @@ import java.util.List;
 public interface NotificationService {
 
     /** Últimas 10 notificaciones del usuario (para el dropdown del header). */
-    List<NotificationDTO> getRecent(Long userId);
+    List<NotificationDTO> getRecent(Long userId, Long localId);
 
     /** Lista paginada; unreadOnly filtra solo las no leídas. */
-    Page<NotificationDTO> getAll(Long userId, int page, int size, boolean unreadOnly);
+    Page<NotificationDTO> getAll(Long userId, Long localId, int page, int size, boolean unreadOnly);
 
     /** Cantidad de notificaciones no leídas. */
-    long getUnreadCount(Long userId);
+    long getUnreadCount(Long userId, Long localId);
 
     /** Marcar una notificación como leída. */
-    NotificationDTO markAsRead(Long notificationId, Long userId);
+    NotificationDTO markAsRead(Long notificationId, Long userId, Long localId);
 
     /** Marcar todas como leídas. */
-    void markAllAsRead(Long userId);
+    void markAllAsRead(Long userId, Long localId);
 
     /** Eliminar una notificación. */
-    void deleteNotification(Long notificationId, Long userId);
+    void deleteNotification(Long notificationId, Long userId, Long localId);
 
     // ── Creación interna ────────────────────────────────────────────────────
 
     /** Crear una notificación para un usuario específico. */
-    NotificationDTO createForUser(Long userId, String title, String message, NotificationType type, String link);
+    NotificationDTO createForUser(Long userId, Long localId, String title, String message,
+                                  NotificationType type, String link);
 
     /** Crear una notificación para todos los usuarios activos. */
-    void createForAllUsers(String title, String message, NotificationType type, String link);
+    void createForAllUsers(Long localId, String title, String message, NotificationType type, String link);
 
     /** Crear la misma notificación para todos los usuarios activos que tengan el permiso (p. ej. {@code notifications.read}). */
     void createForUsersWithPermission(Long localId, String permissionName, String title, String message,

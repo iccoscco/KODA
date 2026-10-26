@@ -14,5 +14,6 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     @org.springframework.data.jpa.repository.Query("SELECT sm FROM StockMovement sm WHERE sm.unitCost IS NULL")
     List<StockMovement> findAllWithoutUnitCost();
 
-    List<StockMovement> findByType(StockMovement.MovementType type);
+    List<StockMovement> findByTypeAndProductVariant_Product_Local_IdOrderByCreatedAtDesc(
+            StockMovement.MovementType type, Long localId);
 }

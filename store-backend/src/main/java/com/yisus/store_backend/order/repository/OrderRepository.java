@@ -64,20 +64,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // ── Dashboard ─────────────────────────────────────────────────────────────
 
     @Query("SELECT COUNT(o), COALESCE(SUM(o.total), 0) FROM Order o " +
-           "WHERE o.status != 'CANCELLED' AND o.createdAt >= :start AND o.createdAt <= :end")
-    List<Object[]> getTodaySummary(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+           "WHERE o.local.id = :localId AND o.status != 'CANCELLED' " +
+           "AND o.createdAt >= :start AND o.createdAt <= :end")
+    List<Object[]> getTodaySummary(@Param("localId") Long localId,
+                                   @Param("start") LocalDateTime start,
+                                   @Param("end") LocalDateTime end);
 
     @Query("SELECT COALESCE(SUM(o.total), 0) FROM Order o " +
-           "WHERE o.status != 'CANCELLED' AND o.createdAt >= :startOfMonth")
-    BigDecimal getMonthSales(@Param("startOfMonth") LocalDateTime startOfMonth);
+           "WHERE o.local.id = :localId AND o.status != 'CANCELLED' AND o.createdAt >= :startOfMonth")
+    BigDecimal getMonthSales(@Param("localId") Long localId,
+                             @Param("startOfMonth") LocalDateTime startOfMonth);
 
     @Query("SELECT o.user.name, COUNT(o), COALESCE(SUM(o.total), 0) FROM Order o " +
-           "WHERE o.status != 'CANCELLED' " +
+           "WHERE o.local.id = :localId AND o.status != 'CANCELLED' " +
            "GROUP BY o.user.id, o.user.name ORDER BY COALESCE(SUM(o.total), 0) DESC")
-    List<Object[]> findSalesBySeller();
+    List<Object[]> findSalesBySeller(@Param("localId") Long localId);
 
     @Query("SELECT o.cashRegister.name, COUNT(o), COALESCE(SUM(o.total), 0) FROM Order o " +
-           "WHERE o.status != 'CANCELLED' AND o.cashRegister IS NOT NULL " +
+           "WHERE o.local.id = :localId AND o.status != 'CANCELLED' AND o.cashRegister IS NOT NULL " +
            "GROUP BY o.cashRegister.id, o.cashRegister.name ORDER BY COALESCE(SUM(o.total), 0) DESC")
-    List<Object[]> findSalesByRegister();
+    List<Object[]> findSalesByRegister(@Param("localId") Long localId);
 }

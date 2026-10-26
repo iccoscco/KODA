@@ -111,11 +111,11 @@ public interface CashOpeningRepository extends JpaRepository<CashOpening, Long> 
             Pageable pageable);
 
     /** Para el Dashboard: número de sesiones actualmente abiertas. */
-    long countByIsActiveTrue();
+    long countByIsActiveTrueAndCashRegister_Local_Id(Long localId);
 
     /** Para el módulo de Reportes: sesiones filtradas sin paginación. */
     @Query("SELECT o FROM CashOpening o LEFT JOIN FETCH o.cashRegister cr WHERE " +
-           "(:registerId IS NULL OR cr.id = :registerId) " +
+           "cr.local.id = :localId AND (:registerId IS NULL OR cr.id = :registerId) " +
            "ORDER BY o.openedAt DESC")
-    List<CashOpening> findForReport(@Param("registerId") Long registerId);
+    List<CashOpening> findForReport(@Param("localId") Long localId, @Param("registerId") Long registerId);
 }

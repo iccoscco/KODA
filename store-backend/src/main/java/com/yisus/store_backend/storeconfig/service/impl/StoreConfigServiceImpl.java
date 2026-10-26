@@ -6,6 +6,7 @@ import com.yisus.store_backend.storeconfig.dto.StoreConfigUpdateDTO;
 import com.yisus.store_backend.storeconfig.model.StoreConfig;
 import com.yisus.store_backend.storeconfig.repository.StoreConfigRepository;
 import com.yisus.store_backend.storeconfig.service.StoreConfigService;
+import com.yisus.store_backend.local.service.LocalScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,23 +25,24 @@ import java.nio.file.StandardCopyOption;
 public class StoreConfigServiceImpl implements StoreConfigService {
 
     private final StoreConfigRepository storeConfigRepository;
+    private final LocalScope localScope;
 
     @Override
     @Transactional(readOnly = true)
     public StoreConfigDTO getConfig() {
-        return toDTO(fetchSingleton());
+        return toDTO(fetchForLocal());
     }
 
     @Override
     @Transactional(readOnly = true)
     public StoreConfig getRawConfig() {
-        return fetchSingleton();
+        return fetchForLocal();
     }
 
     @Override
     @Transactional
     public StoreConfigDTO updateConfig(StoreConfigUpdateDTO dto) {
-        StoreConfig config = fetchSingleton();
+        StoreConfig config = fetchForLocal();
         config.setStoreName(dto.getStoreName().trim());
         config.setStoreRuc(dto.getStoreRuc() != null ? dto.getStoreRuc().trim() : null);
         config.setStoreAddress(dto.getStoreAddress() != null ? dto.getStoreAddress().trim() : null);
@@ -54,7 +56,7 @@ public class StoreConfigServiceImpl implements StoreConfigService {
     @Override
     @Transactional(readOnly = true)
     public StoreConfigBrandingDTO getBranding() {
-        StoreConfig config = fetchSingleton();
+        StoreConfig config = fetchForLocal();
         return StoreConfigBrandingDTO.builder()
                 .storeName(config.getStoreName())
                 .logoUrl(config.getLogoUrl())
@@ -73,7 +75,7 @@ public class StoreConfigServiceImpl implements StoreConfigService {
             throw new RuntimeException("Only image files are allowed");
         }
 
-        StoreConfig config = fetchSingleton();
+        StoreConfig config = fetchForLocal();
 
         try {
             Path uploadDir = Paths.get("uploads", "logos").toAbsolutePath().normalize();
@@ -105,7 +107,7 @@ public class StoreConfigServiceImpl implements StoreConfigService {
     @Override
     @Transactional
     public StoreConfigDTO deleteLogo() {
-        StoreConfig config = fetchSingleton();
+        StoreConfig config = fetchForLocal();
 
         if (config.getLogoUrl() != null && config.getLogoUrl().startsWith("/uploads/logos/")) {
             try {
@@ -122,9 +124,9 @@ public class StoreConfigServiceImpl implements StoreConfigService {
         return toDTO(config);
     }
 
-    private StoreConfig fetchSingleton() {
-        return storeConfigRepository.findById(StoreConfig.SINGLETON_ID)
-                .orElseThrow(() -> new IllegalStateException("Configuración de tienda no encontrada"));
+    private StoreConfig fetchForLocal() {
+        return storeConfigRepository.findByLocal_Id(localScope.id())
+                .orElseThrow(() -> new IllegalStateException("Configuración de tienda no encontrada para el local"));
     }
 
     private StoreConfigDTO toDTO(StoreConfig c) {

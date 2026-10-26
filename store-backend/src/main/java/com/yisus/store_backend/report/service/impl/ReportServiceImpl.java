@@ -18,6 +18,7 @@ import com.yisus.store_backend.product.repository.ProductVariantRepository;
 import com.yisus.store_backend.report.dto.ProductReportRowDTO;
 import com.yisus.store_backend.report.service.ReportService;
 import com.yisus.store_backend.storeconfig.service.StoreConfigService;
+import com.yisus.store_backend.local.service.LocalScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +75,7 @@ public class ReportServiceImpl implements ReportService {
     private final ProductRepository        productRepository;
     private final ProductVariantRepository productVariantRepository;
     private final StoreConfigService       storeConfigService;
+    private final LocalScope localScope;
 
     // ── Datos JSON ────────────────────────────────────────────────────────────
 
@@ -414,7 +416,7 @@ public class ReportServiceImpl implements ReportService {
         Boolean onlyActive = "OPEN".equals(status) ? Boolean.TRUE
                 : "CLOSED".equals(status) ? Boolean.FALSE : null;
 
-        return cashOpeningRepository.findForReport(cashRegisterId).stream()
+        return cashOpeningRepository.findForReport(localScope.id(), cashRegisterId).stream()
                 .filter(o -> fromF == null || !o.getOpenedAt().isBefore(fromF))
                 .filter(o -> toF   == null || o.getOpenedAt().isBefore(toF))
                 .filter(o -> onlyActive == null || onlyActive.equals(o.getIsActive()))
@@ -424,13 +426,15 @@ public class ReportServiceImpl implements ReportService {
     private List<ProductReportRowDTO> buildProductRows(Long categoryId, String status, String stockFilter) {
         Boolean isActive = "ACTIVE".equals(status) ? Boolean.TRUE
                 : "INACTIVE".equals(status) ? Boolean.FALSE : null;
-        List<Product> products = productRepository.findForReport(categoryId).stream()
+        Long localId = localScope.id();
+        List<Product> products = productRepository.findForReport(localId, categoryId).stream()
                 .filter(p -> isActive == null || isActive.equals(p.getIsActive()))
                 .collect(Collectors.toList());
         if (products.isEmpty()) return List.of();
 
         List<Long> ids = products.stream().map(Product::getId).toList();
-        Map<Long, List<ProductVariant>> byProduct = productVariantRepository.findActiveByProductIdIn(ids)
+        Map<Long, List<ProductVariant>> byProduct =
+                productVariantRepository.findActiveByProductIdInAndLocalId(ids, localId)
                 .stream().collect(Collectors.groupingBy(pv -> pv.getProduct().getId()));
 
         List<ProductReportRowDTO> rows = products.stream().map(p -> {

@@ -26,6 +26,15 @@ public class UserDTO {
     
     @Schema(description = "User role", example = "USER")
     private String role;
+
+    @Schema(description = "Assigned local ID; null for a global superadmin", example = "1")
+    private Long localId;
+
+    @Schema(description = "Assigned local name; null for a global superadmin", example = "Local inicial")
+    private String localName;
+
+    @Schema(description = "Whether this user can select an operational local", example = "false")
+    private Boolean canSwitchLocal;
     
     @Schema(description = "User permissions")
     private List<String> permissions;

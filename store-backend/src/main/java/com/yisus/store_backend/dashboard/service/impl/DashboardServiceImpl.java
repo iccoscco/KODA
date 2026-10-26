@@ -7,6 +7,7 @@ import com.yisus.store_backend.dashboard.dto.RegisterSalesDTO;
 import com.yisus.store_backend.dashboard.dto.SellerSalesDTO;
 import com.yisus.store_backend.dashboard.service.DashboardService;
 import com.yisus.store_backend.order.repository.OrderRepository;
+import com.yisus.store_backend.local.service.LocalScope;
 import com.yisus.store_backend.product.model.ProductVariant;
 import com.yisus.store_backend.product.repository.ProductVariantRepository;
 import com.yisus.store_backend.product.repository.StockMovementRepository;
@@ -32,6 +33,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final ProductVariantRepository productVariantRepository;
     private final CashOpeningRepository    cashOpeningRepository;
     private final StockMovementRepository  stockMovementRepository;
+    private final LocalScope localScope;
 
     @Override
     @Transactional(readOnly = true)
@@ -40,11 +42,12 @@ public class DashboardServiceImpl implements DashboardService {
         LocalDateTime endOfDay     = LocalDate.now().atTime(23, 59, 59);
         LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
 
-        List<Object[]> todayRows = orderRepository.getTodaySummary(startOfDay, endOfDay);
+        Long localId = localScope.id();
+        List<Object[]> todayRows = orderRepository.getTodaySummary(localId, startOfDay, endOfDay);
         Object[] todayRow = (!todayRows.isEmpty()) ? todayRows.get(0) : new Object[]{0L, BigDecimal.ZERO};
-        BigDecimal monthSales = orderRepository.getMonthSales(startOfMonth);
-        long openSessions  = cashOpeningRepository.countByIsActiveTrue();
-        int lowStockCount  = productVariantRepository.countLowStock();
+        BigDecimal monthSales = orderRepository.getMonthSales(localId, startOfMonth);
+        long openSessions  = cashOpeningRepository.countByIsActiveTrueAndCashRegister_Local_Id(localId);
+        int lowStockCount  = productVariantRepository.countLowStock(localId);
 
         return DashboardSummaryDTO.builder()
                 .todayOrders(todayRow[0] != null ? ((Number) todayRow[0]).intValue() : 0)
@@ -58,7 +61,7 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<SellerSalesDTO> getSalesBySeller() {
-        return orderRepository.findSalesBySeller().stream()
+        return orderRepository.findSalesBySeller(localScope.id()).stream()
                 .map(row -> SellerSalesDTO.builder()
                         .sellerName((String) row[0])
                         .orderCount(((Number) row[1]).intValue())
@@ -70,7 +73,7 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<RegisterSalesDTO> getSalesByRegister() {
-        return orderRepository.findSalesByRegister().stream()
+        return orderRepository.findSalesByRegister(localScope.id()).stream()
                 .map(row -> RegisterSalesDTO.builder()
                         .registerName((String) row[0])
                         .orderCount(((Number) row[1]).intValue())
@@ -82,7 +85,7 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<LowStockAlertDTO> getLowStockAlerts() {
-        return productVariantRepository.findLowStockWithDetails().stream()
+        return productVariantRepository.findLowStockWithDetails(localScope.id()).stream()
                 .map(pv -> {
                     List<String> parts = new ArrayList<>();
                     if (pv.getColor() != null) parts.add(pv.getColor().getName());
@@ -104,7 +107,8 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<StockMovementDTO> getStockInputs() {
-        return stockMovementRepository.findByType(StockMovement.MovementType.INPUT).stream()
+        return stockMovementRepository.findByTypeAndProductVariant_Product_Local_IdOrderByCreatedAtDesc(
+                        StockMovement.MovementType.INPUT, localScope.id()).stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }

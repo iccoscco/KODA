@@ -1,5 +1,6 @@
 package com.yisus.store_backend.notification.model;
 
+import com.yisus.store_backend.local.model.Local;
 import com.yisus.store_backend.user.model.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -25,6 +26,10 @@ public class Notification {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "local_id", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    private Local local;
 
     @Column(nullable = false)
     private String title;

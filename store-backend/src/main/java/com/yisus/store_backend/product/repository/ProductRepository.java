@@ -41,10 +41,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Page<Product> findBySearch(@Param("search") String search, Pageable pageable);
 
     /** Para el módulo de Reportes: productos filtrados sin paginación. */
-    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.category c WHERE " +
-           "(:categoryId IS NULL OR c.id = :categoryId) " +
+    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.category c WHERE p.local.id = :localId " +
+           "AND (:categoryId IS NULL OR c.id = :categoryId) " +
            "ORDER BY p.name ASC")
-    List<Product> findForReport(@Param("categoryId") Long categoryId);
+    List<Product> findForReport(@Param("localId") Long localId, @Param("categoryId") Long categoryId);
 
     long countByCategory_IdAndIsActiveTrue(Long categoryId);
 

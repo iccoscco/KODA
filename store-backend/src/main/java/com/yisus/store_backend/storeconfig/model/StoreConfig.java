@@ -1,5 +1,6 @@
 package com.yisus.store_backend.storeconfig.model;
 
+import com.yisus.store_backend.local.model.Local;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,7 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Configuración general de la tienda. Siempre existe una única fila con id = 1.
+ * Configuración operativa y de branding de un local.
  */
 @Entity
 @Table(name = "store_config")
@@ -20,10 +21,13 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class StoreConfig {
 
-    public static final Long SINGLETON_ID = 1L;
-
     @Id
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "local_id",
+            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    private Local local;
 
     @Column(name = "store_name", nullable = false)
     private String storeName;

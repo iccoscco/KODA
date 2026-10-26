@@ -16,6 +16,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u.local.id FROM User u WHERE u.id = :id")
     Optional<Long> findLocalIdById(@Param("id") Long id);
     Optional<User> findByIdAndLocal_Id(Long id, Long localId);
+    boolean existsByAvatarUrlAndLocal_Id(String avatarUrl, Long localId);
 
     @Query("SELECT u FROM User u WHERE u.local.id = :localId AND u.role.name <> 'SUPERADMIN' AND u.isActive = true")
     List<User> findActiveInLocal(@Param("localId") Long localId);
@@ -35,6 +36,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByRole_IdAndIsActiveTrue(Long roleId);
     
     List<User> findByIsActiveTrue();
+    List<User> findByLocal_IdAndIsActiveTrue(Long localId);
 
     /** Usuarios activos cuyo rol incluye el permiso dado (p. ej. centrar notificaciones en quien puede verlas). */
     @Query("SELECT DISTINCT u FROM User u JOIN u.role r JOIN r.permissions p WHERE u.isActive = true AND p.name = :permissionName")

@@ -14,15 +14,21 @@ import java.util.List;
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-    Page<Notification> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+    Page<Notification> findByUserIdAndLocal_IdOrderByCreatedAtDesc(
+            Long userId, Long localId, Pageable pageable);
 
-    Page<Notification> findByUserIdAndIsReadFalseOrderByCreatedAtDesc(Long userId, Pageable pageable);
+    Page<Notification> findByUserIdAndLocal_IdAndIsReadFalseOrderByCreatedAtDesc(
+            Long userId, Long localId, Pageable pageable);
 
-    List<Notification> findTop10ByUserIdOrderByCreatedAtDesc(Long userId);
+    List<Notification> findTop10ByUserIdAndLocal_IdOrderByCreatedAtDesc(Long userId, Long localId);
 
-    long countByUserIdAndIsReadFalse(Long userId);
+    long countByUserIdAndLocal_IdAndIsReadFalse(Long userId, Long localId);
+
+    java.util.Optional<Notification> findByIdAndUserIdAndLocal_Id(
+            Long id, Long userId, Long localId);
 
     @Modifying
-    @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.id = :userId AND n.isRead = false")
-    void markAllAsReadByUserId(@Param("userId") Long userId);
+    @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.id = :userId " +
+            "AND n.local.id = :localId AND n.isRead = false")
+    void markAllAsReadByUserIdAndLocalId(@Param("userId") Long userId, @Param("localId") Long localId);
 }

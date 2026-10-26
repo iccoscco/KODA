@@ -56,7 +56,7 @@ public class SizeController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('products.create')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('products.create')")
     @Operation(summary = "Create size", description = "Create a new size")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "201", description = "Size created successfully", 
@@ -70,7 +70,7 @@ public class SizeController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('products.update')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('products.update')")
     @Operation(summary = "Update size", description = "Update an existing size")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Size updated successfully", 
@@ -85,7 +85,7 @@ public class SizeController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('products.delete')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('products.delete')")
     @Operation(summary = "Delete size", description = "Delete a size")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Size deleted successfully"),

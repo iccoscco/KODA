@@ -49,7 +49,6 @@ public class SecurityConfig {
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/", "/error", "/favicon.ico").permitAll()
-                        .requestMatchers("/uploads/**").permitAll()
                         // SSE: autenticado mediante ticket efímero, no con JWT en cabecera
                         .requestMatchers("/notifications/stream").permitAll()
                         .anyRequest().authenticated()
@@ -61,6 +60,17 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(customAuthenticationEntryPoint())
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json;charset=UTF-8");
+                            Map<String, Object> body = new LinkedHashMap<>();
+                            body.put("timestamp", java.time.LocalDateTime.now().toString());
+                            body.put("status", HttpServletResponse.SC_FORBIDDEN);
+                            body.put("error", "Forbidden");
+                            body.put("message", "Access denied");
+                            body.put("path", request.getRequestURI());
+                            response.getWriter().write(new ObjectMapper().writeValueAsString(body));
+                        })
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

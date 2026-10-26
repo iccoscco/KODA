@@ -6,6 +6,7 @@ import com.yisus.store_backend.notification.model.NotificationType;
 import com.yisus.store_backend.notification.repository.NotificationRepository;
 import com.yisus.store_backend.notification.service.NotificationService;
 import com.yisus.store_backend.notification.sse.NotificationSseRegistry;
+import com.yisus.store_backend.common.exception.ResourceNotFoundException;
 import com.yisus.store_backend.user.model.User;
 import com.yisus.store_backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,76 +29,80 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<NotificationDTO> getRecent(Long userId) {
-        return notificationRepository.findTop10ByUserIdOrderByCreatedAtDesc(userId)
+    public List<NotificationDTO> getRecent(Long userId, Long localId) {
+        return notificationRepository.findTop10ByUserIdAndLocal_IdOrderByCreatedAtDesc(userId, localId)
                 .stream().map(this::toDTO).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<NotificationDTO> getAll(Long userId, int page, int size, boolean unreadOnly) {
+    public Page<NotificationDTO> getAll(Long userId, Long localId, int page, int size, boolean unreadOnly) {
         PageRequest pageable = PageRequest.of(page, size);
         if (unreadOnly) {
             return notificationRepository
-                    .findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId, pageable)
+                    .findByUserIdAndLocal_IdAndIsReadFalseOrderByCreatedAtDesc(userId, localId, pageable)
                     .map(this::toDTO);
         }
         return notificationRepository
-                .findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                .findByUserIdAndLocal_IdOrderByCreatedAtDesc(userId, localId, pageable)
                 .map(this::toDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public long getUnreadCount(Long userId) {
-        return notificationRepository.countByUserIdAndIsReadFalse(userId);
+    public long getUnreadCount(Long userId, Long localId) {
+        return notificationRepository.countByUserIdAndLocal_IdAndIsReadFalse(userId, localId);
     }
 
     @Override
     @Transactional
-    public NotificationDTO markAsRead(Long notificationId, Long userId) {
-        Notification notification = findOwned(notificationId, userId);
+    public NotificationDTO markAsRead(Long notificationId, Long userId, Long localId) {
+        Notification notification = findOwned(notificationId, userId, localId);
         notification.setRead(true);
         return toDTO(notificationRepository.save(notification));
     }
 
     @Override
     @Transactional
-    public void markAllAsRead(Long userId) {
-        notificationRepository.markAllAsReadByUserId(userId);
+    public void markAllAsRead(Long userId, Long localId) {
+        notificationRepository.markAllAsReadByUserIdAndLocalId(userId, localId);
     }
 
     @Override
     @Transactional
-    public void deleteNotification(Long notificationId, Long userId) {
-        Notification notification = findOwned(notificationId, userId);
+    public void deleteNotification(Long notificationId, Long userId, Long localId) {
+        Notification notification = findOwned(notificationId, userId, localId);
         notificationRepository.delete(notification);
     }
 
     @Override
     @Transactional
-    public NotificationDTO createForUser(Long userId, String title, String message, NotificationType type, String link) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+    public NotificationDTO createForUser(Long userId, Long localId, String title, String message,
+                                         NotificationType type, String link) {
+        User user = userRepository.findByIdAndLocal_Id(userId, localId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         Notification n = Notification.builder()
                 .user(user)
+                .local(user.getLocal())
                 .title(title)
                 .message(message)
                 .type(type)
                 .link(link)
                 .build();
         NotificationDTO dto = toDTO(notificationRepository.save(n));
-        sseRegistry.sendToUser(userId, dto);
+        sseRegistry.sendToUser(userId, localId, dto);
         return dto;
     }
 
     @Override
     @Transactional
-    public void createForAllUsers(String title, String message, NotificationType type, String link) {
-        List<User> activeUsers = userRepository.findByIsActiveTrue();
+    public void createForAllUsers(Long localId, String title, String message,
+                                  NotificationType type, String link) {
+        List<User> activeUsers = userRepository.findByLocal_IdAndIsActiveTrue(localId);
         List<Notification> notifications = activeUsers.stream()
                 .map(u -> Notification.builder()
                         .user(u)
+                        .local(u.getLocal())
                         .title(title)
                         .message(message)
                         .type(type)
@@ -107,7 +112,7 @@ public class NotificationServiceImpl implements NotificationService {
         List<Notification> saved = notificationRepository.saveAll(notifications);
         // Emitir SSE individualmente por usuario para que cada cliente reciba su propio DTO con el id correcto
         for (Notification n : saved) {
-            sseRegistry.sendToUser(n.getUser().getId(), toDTO(n));
+            sseRegistry.sendToUser(n.getUser().getId(), localId, toDTO(n));
         }
     }
 
@@ -123,6 +128,7 @@ public class NotificationServiceImpl implements NotificationService {
         List<Notification> notifications = users.stream()
                 .map(u -> Notification.builder()
                         .user(u)
+                        .local(u.getLocal())
                         .title(title)
                         .message(message)
                         .type(type)
@@ -131,19 +137,15 @@ public class NotificationServiceImpl implements NotificationService {
                 .toList();
         List<Notification> saved = notificationRepository.saveAll(notifications);
         for (Notification n : saved) {
-            sseRegistry.sendToUser(n.getUser().getId(), toDTO(n));
+            sseRegistry.sendToUser(n.getUser().getId(), localId, toDTO(n));
         }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
 
-    private Notification findOwned(Long notificationId, Long userId) {
-        Notification n = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new RuntimeException("Notification not found: " + notificationId));
-        if (!n.getUser().getId().equals(userId)) {
-            throw new RuntimeException("Access denied to notification: " + notificationId);
-        }
-        return n;
+    private Notification findOwned(Long notificationId, Long userId, Long localId) {
+        return notificationRepository.findByIdAndUserIdAndLocal_Id(notificationId, userId, localId)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found"));
     }
 
     private NotificationDTO toDTO(Notification n) {

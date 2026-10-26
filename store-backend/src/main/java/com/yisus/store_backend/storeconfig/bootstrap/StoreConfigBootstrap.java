@@ -1,5 +1,7 @@
 package com.yisus.store_backend.storeconfig.bootstrap;
 
+import com.yisus.store_backend.local.model.Local;
+import com.yisus.store_backend.local.repository.LocalRepository;
 import com.yisus.store_backend.storeconfig.model.StoreConfig;
 import com.yisus.store_backend.storeconfig.repository.StoreConfigRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,20 +23,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class StoreConfigBootstrap implements ApplicationRunner {
 
     private final StoreConfigRepository storeConfigRepository;
+    private final LocalRepository localRepository;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (!storeConfigRepository.existsById(StoreConfig.SINGLETON_ID)) {
-            storeConfigRepository.save(
-                    StoreConfig.builder()
-                            .id(StoreConfig.SINGLETON_ID)
-                            .storeName("Mi Tienda")
-                            .storeRuc("")
-                            .storeAddress("")
-                            .build()
-            );
-            log.info("Configuración de tienda inicial creada (id=1)");
+        for (Local local : localRepository.findAll()) {
+            if (storeConfigRepository.existsByLocal_Id(local.getId())) {
+                continue;
+            }
+            storeConfigRepository.save(StoreConfig.builder()
+                    .id(local.getId())
+                    .local(local)
+                    .storeName("Mi Tienda")
+                    .storeRuc("")
+                    .storeAddress("")
+                    .build());
+            log.info("Configuración de tienda inicial creada para local {}", local.getCode());
         }
     }
 }

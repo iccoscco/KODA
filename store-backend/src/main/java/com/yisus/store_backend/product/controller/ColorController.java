@@ -56,7 +56,7 @@ public class ColorController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('products.create')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('products.create')")
     @Operation(summary = "Create color", description = "Create a new color")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "201", description = "Color created successfully", 
@@ -70,7 +70,7 @@ public class ColorController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('products.update')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('products.update')")
     @Operation(summary = "Update color", description = "Update an existing color")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Color updated successfully", 
@@ -85,7 +85,7 @@ public class ColorController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('products.delete')")
+    @PreAuthorize("hasRole('SUPERADMIN') and hasAuthority('products.delete')")
     @Operation(summary = "Delete color", description = "Delete a color")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Color deleted successfully"),

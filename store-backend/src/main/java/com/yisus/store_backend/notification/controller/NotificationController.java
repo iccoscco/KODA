@@ -3,6 +3,7 @@ package com.yisus.store_backend.notification.controller;
 import com.yisus.store_backend.notification.dto.NotificationDTO;
 import com.yisus.store_backend.notification.service.NotificationService;
 import com.yisus.store_backend.notification.sse.NotificationSseRegistry;
+import com.yisus.store_backend.local.service.LocalScope;
 import com.yisus.store_backend.user.model.User;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -28,6 +29,7 @@ public class NotificationController {
 
     private final NotificationService notificationService;
     private final NotificationSseRegistry sseRegistry;
+    private final LocalScope localScope;
 
     /**
      * Genera un ticket de un solo uso (TTL 30s) para conectar el stream SSE sin
@@ -37,7 +39,7 @@ public class NotificationController {
     @PreAuthorize("hasAuthority('notifications.read')")
     @Operation(summary = "Obtener ticket efímero para conectar al stream SSE")
     public ResponseEntity<Map<String, String>> createStreamTicket(Authentication auth) {
-        String ticket = sseRegistry.createTicket(userId(auth));
+        String ticket = sseRegistry.createTicket(userId(auth), localScope.id());
         return ResponseEntity.ok(Map.of("ticket", ticket));
     }
 
@@ -48,18 +50,18 @@ public class NotificationController {
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "SSE stream de notificaciones en tiempo real (requiere ticket)")
     public ResponseEntity<SseEmitter> stream(@RequestParam String ticket) {
-        Long userId = sseRegistry.consumeTicket(ticket);
-        if (userId == null) {
+        NotificationSseRegistry.TicketIdentity identity = sseRegistry.consumeTicket(ticket);
+        if (identity == null) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(sseRegistry.subscribe(userId));
+        return ResponseEntity.ok(sseRegistry.subscribe(identity.userId(), identity.localId()));
     }
 
     @GetMapping("/recent")
     @PreAuthorize("hasAuthority('notifications.read')")
     @Operation(summary = "Últimas 10 notificaciones para el dropdown del header")
     public ResponseEntity<List<NotificationDTO>> getRecent(Authentication auth) {
-        return ResponseEntity.ok(notificationService.getRecent(userId(auth)));
+        return ResponseEntity.ok(notificationService.getRecent(userId(auth), localScope.id()));
     }
 
     @GetMapping
@@ -70,28 +72,29 @@ public class NotificationController {
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "false") boolean unreadOnly) {
-        return ResponseEntity.ok(notificationService.getAll(userId(auth), page, size, unreadOnly));
+        return ResponseEntity.ok(notificationService.getAll(userId(auth), localScope.id(), page, size, unreadOnly));
     }
 
     @GetMapping("/unread-count")
     @PreAuthorize("hasAuthority('notifications.read')")
     @Operation(summary = "Cantidad de notificaciones no leídas")
     public ResponseEntity<Map<String, Long>> getUnreadCount(Authentication auth) {
-        return ResponseEntity.ok(Map.of("count", notificationService.getUnreadCount(userId(auth))));
+        return ResponseEntity.ok(Map.of("count",
+                notificationService.getUnreadCount(userId(auth), localScope.id())));
     }
 
     @PatchMapping("/{id}/read")
     @PreAuthorize("hasAuthority('notifications.read')")
     @Operation(summary = "Marcar una notificación como leída")
     public ResponseEntity<NotificationDTO> markAsRead(@PathVariable Long id, Authentication auth) {
-        return ResponseEntity.ok(notificationService.markAsRead(id, userId(auth)));
+        return ResponseEntity.ok(notificationService.markAsRead(id, userId(auth), localScope.id()));
     }
 
     @PatchMapping("/read-all")
     @PreAuthorize("hasAuthority('notifications.read')")
     @Operation(summary = "Marcar todas las notificaciones como leídas")
     public ResponseEntity<Void> markAllAsRead(Authentication auth) {
-        notificationService.markAllAsRead(userId(auth));
+        notificationService.markAllAsRead(userId(auth), localScope.id());
         return ResponseEntity.noContent().build();
     }
 
@@ -99,7 +102,7 @@ public class NotificationController {
     @PreAuthorize("hasAuthority('notifications.read')")
     @Operation(summary = "Eliminar una notificación")
     public ResponseEntity<Void> delete(@PathVariable Long id, Authentication auth) {
-        notificationService.deleteNotification(id, userId(auth));
+        notificationService.deleteNotification(id, userId(auth), localScope.id());
         return ResponseEntity.noContent().build();
     }
 

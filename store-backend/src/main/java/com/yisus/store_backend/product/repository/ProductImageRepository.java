@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface ProductImageRepository extends JpaRepository<ProductImage, Long> {
     Optional<ProductImage> findByIdAndProductVariant_Product_Local_Id(Long id, Long localId);
+    boolean existsByUrlAndProductVariant_Product_Local_Id(String url, Long localId);
 
     List<ProductImage> findByProductVariantIdOrderByIsMainDesc(Long productVariantId);
 }

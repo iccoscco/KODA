@@ -51,21 +51,24 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     Optional<ProductVariant> findFirstByProductIdAndSkuStartingWith(Long productId, String skuPrefix);
 
     /** Para el módulo de Reportes: variantes activas de múltiples productos en una sola query. */
-    @Query("SELECT pv FROM ProductVariant pv WHERE pv.product.id IN :productIds AND pv.isActive = true")
-    List<ProductVariant> findActiveByProductIdIn(@Param("productIds") List<Long> productIds);
+    @Query("SELECT pv FROM ProductVariant pv WHERE pv.product.id IN :productIds " +
+           "AND pv.product.local.id = :localId AND pv.isActive = true")
+    List<ProductVariant> findActiveByProductIdInAndLocalId(
+            @Param("productIds") List<Long> productIds, @Param("localId") Long localId);
 
     /** Para el Dashboard: variantes con stock ≤ su propio minStock, con producto, color y talla cargados. */
     @Query("SELECT pv FROM ProductVariant pv " +
            "LEFT JOIN FETCH pv.product " +
            "LEFT JOIN FETCH pv.color " +
            "LEFT JOIN FETCH pv.size " +
-           "WHERE pv.stock <= pv.minStock AND pv.isActive = true " +
+           "WHERE pv.product.local.id = :localId AND pv.stock <= pv.minStock AND pv.isActive = true " +
            "ORDER BY pv.stock ASC, pv.product.name ASC")
-    List<ProductVariant> findLowStockWithDetails();
+    List<ProductVariant> findLowStockWithDetails(@Param("localId") Long localId);
 
     /** Cuenta variantes activas cuyo stock está por debajo de su propio minStock. */
-    @Query("SELECT COUNT(pv) FROM ProductVariant pv WHERE pv.stock <= pv.minStock AND pv.isActive = true")
-    int countLowStock();
+    @Query("SELECT COUNT(pv) FROM ProductVariant pv WHERE pv.product.local.id = :localId " +
+           "AND pv.stock <= pv.minStock AND pv.isActive = true")
+    int countLowStock(@Param("localId") Long localId);
 
     @Query("SELECT COUNT(pv) FROM ProductVariant pv JOIN pv.product p WHERE p.category.id = :categoryId AND pv.isActive = true AND p.isActive = true")
     long countByProductCategoryId(@Param("categoryId") Long categoryId);
