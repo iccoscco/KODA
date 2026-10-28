@@ -42,6 +42,7 @@ import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuthStore } from "@/store/auth.store";
 import { parseBackendDate } from "@/shared/utils/dateFormat";
+import { LocalSelector } from "@/shared/components/LocalWorkspace";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -210,6 +211,7 @@ export default function Header({ onMenuClick, onToggleSidebar, collapsed }: Head
                 {/* Spacer — solo desktop */}
                 <Box sx={{ flexGrow: 1, display: { xs: "none", md: "block" } }} />
 
+                <LocalSelector />
                 {/* Acciones */}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     {canNotifications && (

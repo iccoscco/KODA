@@ -1,7 +1,7 @@
-import { Box } from "@mui/material";
+import { Alert, Box, Button, Typography } from "@mui/material";
+import Link from "next/link";
 import ThemeToggle from "@/shared/components/themeToggle";
 import AuthPublicEntryCleanup from "@/features/auth/components/AuthPublicEntryCleanup";
-import RegisterForm from "@/features/auth/register/components/registerForm";
 
 export default function Register() {
     return (
@@ -29,7 +29,9 @@ export default function Register() {
                     boxShadow: 8,
                 }}
             >
-                <RegisterForm />
+                <Typography variant="h5" gutterBottom>Alta administrada</Typography>
+                <Alert severity="info">Solicita tu acceso al administrador del local. El registro público está deshabilitado.</Alert>
+                <Button component={Link} href="/login" sx={{ mt: 2 }}>Volver al inicio de sesión</Button>
             </Box>
         </Box>
     );

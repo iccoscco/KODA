@@ -74,7 +74,7 @@ export default function EditUser({ open, user, onClose, onSuccess }: EditUserPro
         setLoadingRoles(true);
         RoleService.getAllRoles()
             .then((res) => {
-                const active = res.filter((r) => r.isActive);
+                const active = res.filter((r) => r.isActive && r.name !== "SUPERADMIN");
                 setRoles(active);
                 const match = active.find((r) => r.name === source.role);
                 if (match) setRoleId(match.id);

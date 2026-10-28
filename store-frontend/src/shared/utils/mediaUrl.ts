@@ -1,3 +1,5 @@
+import { useAuthStore } from "@/store/auth.store";
+import { useLocalStore } from "@/store/local.store";
 const API_BASE = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
 function getAssetsBaseUrl(): string {
@@ -14,6 +16,11 @@ function getAssetsBaseUrl(): string {
 
 export function toMediaUrl(path: string | null | undefined): string {
     if (!path) return "";
+    if (path.startsWith("/uploads/")) {
+        const local = useLocalStore.getState().current;
+        const query = useAuthStore.getState().user?.canSwitchLocal && local ? `?localId=${local.id}` : "";
+        return `/api/local-media/${path.slice("/uploads/".length)}${query}`;
+    }
     if (/^https?:\/\//i.test(path)) return path;
     const base = getAssetsBaseUrl();
     if (!base) return path;

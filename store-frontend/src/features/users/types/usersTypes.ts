@@ -4,6 +4,9 @@ export interface User {
     email: string;
     avatarUrl?: string | null;
     role: string;
+    localId: number | null;
+    localName: string | null;
+    canSwitchLocal: boolean;
     permissions: string[];
     permissionsCount: number;
     isActive: boolean;

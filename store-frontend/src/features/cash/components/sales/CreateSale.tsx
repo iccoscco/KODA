@@ -48,6 +48,7 @@ import {
 } from "@/shared/mui/adminFormDialog";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { NumericField } from "@/shared/components/NumericField";
+import type { User } from "@/features/users/types/usersTypes";
 
 interface Props {
     open: boolean;
@@ -154,12 +155,26 @@ export default function CreateSale({ open, onClose, onSuccess }: Props) {
     const isSmUp = useMediaQuery(theme.breakpoints.up("sm"), { defaultMatches: true });
     const { execute: createSale, loading: submitting } = useCreateSale();
     const authUserId = useAuthStore(selectAuthUserId);
+    const canSwitchLocal = useAuthStore((s) => s.user?.canSwitchLocal === true);
+    const [operators, setOperators] = useState<User[]>([]);
+    const [operatorId, setOperatorId] = useState<number | "">("");
+    const saleUserId = canSwitchLocal ? (operatorId || null) : authUserId;
     const canSellBelowSale = useHasPermission(PERMISSIONS.ORDERS.MODIFY_PRICE_BELOW_SALE);
     const canSellBelowPurchase = useHasPermission(PERMISSIONS.ORDERS.MODIFY_PRICE_BELOW_PURCHASE);
     const canNotifications = useHasPermission(PERMISSIONS.NOTIFICATIONS.READ);
     const setUnreadCount = useNotificationsStore((s) => s.setUnreadCount);
     /** Precio unitario 0: el backend exige permisos bajo PVP y bajo costo (cero queda por debajo de ambos). */
     const canSellAtZeroUnit = canSellBelowSale && canSellBelowPurchase;
+
+    useEffect(() => {
+        if (!open || !canSwitchLocal) return;
+        let active = true;
+        setOperatorId(""); setOperators([]);
+        ApiService.get<User[]>("/users").then(({ data }) => {
+            if (active) setOperators(data.filter((u) => u.isActive && u.localId != null));
+        }).catch(() => { if (active) setLoadError("No se pudieron cargar los responsables del local. Reabre la venta para reintentar."); });
+        return () => { active = false; };
+    }, [open, canSwitchLocal]);
 
     const [products, setProducts] = useState<Product[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(false);
@@ -469,8 +484,8 @@ export default function CreateSale({ open, onClose, onSuccess }: Props) {
     const validate = (): boolean => {
         const errs: FormErrors = {};
 
-        if (authUserId == null || !Number.isFinite(authUserId)) {
-            errs.session = "Sesión no válida. Inicia sesión para vender.";
+        if (saleUserId == null || !Number.isFinite(saleUserId)) {
+            errs.session = canSwitchLocal ? "Selecciona un responsable del local para registrar la venta." : "Sesión no válida. Inicia sesión para vender.";
         }
 
         lines.forEach((line, i) => {
@@ -561,7 +576,7 @@ export default function CreateSale({ open, onClose, onSuccess }: Props) {
     };
 
     const buildPayload = () => {
-        const userId = authUserId!;
+        const userId = saleUserId!;
 
         const warnings: WarningLine[] = [];
         const orderItems = lines.map((line, i) => {
@@ -741,6 +756,11 @@ export default function CreateSale({ open, onClose, onSuccess }: Props) {
                     }}
                 >
                     <Stack spacing={2} sx={{ mb: 2.5 }}>
+                        {canSwitchLocal && <TextField select label="Responsable de la venta en este local" value={operatorId}
+                            onChange={(e) => { setOperatorId(Number(e.target.value)); setErrors((prev) => ({ ...prev, session: "" })); }}
+                            helperText={operators.length ? "El responsable debe pertenecer al local activo." : "Crea primero un usuario activo en este local."}>
+                            {operators.map((u) => <MenuItem key={u.id} value={Number(u.id)}>{u.name} · {u.email}</MenuItem>)}
+                        </TextField>}
                         {loadError && <Alert severity="warning">{loadError}</Alert>}
                         {submitError && <Alert severity="error">{submitError}</Alert>}
                         {errors.session && <Alert severity="error">{errors.session}</Alert>}

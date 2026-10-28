@@ -1,11 +1,9 @@
-import DashboardLayout from "@/shared/components/layout/dashboardLayout";
-import SessionSync from "@/shared/components/SessionSync";
+import LocalWorkspace from "@/shared/components/LocalWorkspace";
 
 export default function DashboardRootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <DashboardLayout>
-            <SessionSync />
+        <LocalWorkspace>
             {children}
-        </DashboardLayout>
+        </LocalWorkspace>
     );
 }

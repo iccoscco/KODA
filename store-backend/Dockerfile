@@ -1,10 +1,11 @@
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
-# Dependencias primero (capa cacheable mientras no cambie pom.xml).
+# Wrapper de Maven. Se normaliza porque fue versionado con saltos de línea de
+# Windows y la imagen de compilación usa Alpine/Linux.
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw dependency:go-offline -B
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw
 
 # Código fuente y build.
 COPY src ./src

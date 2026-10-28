@@ -32,7 +32,7 @@ export default async function RootLayout({
   const initialMode = rawMode === "light" ? "light" : "dark";
 
   return (
-    <html lang="en">
+    <html lang="es">
       <body className={roboto.variable} suppressHydrationWarning>
         <AppRouterCacheProvider>
           <ThemeRegistry initialMode={initialMode}>

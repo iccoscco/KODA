@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { User } from "@/features/users/types/usersTypes";
 import { Permission } from "@/shared/config/permissions";
+import { useLocalStore, localSelectionKey } from "./local.store";
+import { useNotificationsStore } from "./notifications.store";
+import { useStoreConfigStore } from "./storeConfig.store";
 
 export interface AuthState {
     user: User | null;
@@ -29,6 +32,11 @@ export const useAuthStore = create<AuthState>()(
             },
 
             clearSession: () => {
+                const user = get().user;
+                if (typeof window !== "undefined" && user) sessionStorage.removeItem(localSelectionKey(user.id));
+                useLocalStore.getState().setContext(null);
+                useNotificationsStore.setState({ unreadCount: 0, recent: [] });
+                useStoreConfigStore.getState().setStoreConfig({ storeName: "", logoUrl: null });
                 set({ user: null });
             },
 

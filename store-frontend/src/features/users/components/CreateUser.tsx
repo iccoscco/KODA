@@ -48,7 +48,7 @@ export default function CreateUser({ open, onClose, onSuccess }: CreateUserProps
         setName(""); setEmail(""); setPassword(""); setRoleId("");
         setLoadingRoles(true);
         RoleService.getAllRoles()
-            .then((res) => setRoles(res.filter((r) => r.isActive)))
+            .then((res) => setRoles(res.filter((r) => r.isActive && r.name !== "SUPERADMIN")))
             .catch(() => setRoles([]))
             .finally(() => setLoadingRoles(false));
     }, [open]);

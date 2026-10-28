@@ -14,6 +14,7 @@ import {
     normalizeNotificationItem,
 } from "@/features/notifications/services/notification.service";
 import { useAuthStore } from "@/store/auth.store";
+import { useLocalStore } from "@/store/local.store";
 import { PERMISSIONS } from "@/shared/config/permissions";
 import type { NotificationItem } from "@/features/notifications/types/notificationTypes";
 
@@ -62,17 +63,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         let es: EventSource | null = null;
         let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
         let destroyed = false;
+        const generation = useLocalStore.getState().generation;
 
         const connect = async () => {
             if (destroyed) return;
             try {
                 // 1. Pedir ticket efímero (30 s, un solo uso); sesión vía cookies httpOnly
-                const res = await fetch(`/api/notifications/stream/ticket`, {
-                    method: "POST",
-                    credentials: "include",
-                });
-                if (!res.ok) return;
-                const { ticket } = await res.json() as { ticket: string };
+                const res = await ApiService.post<{ ticket: string }>("/notifications/stream/ticket");
+                const { ticket } = res.data;
 
                 if (destroyed) return;
 
@@ -80,6 +78,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 es = new EventSource(`/api/notifications/stream?ticket=${encodeURIComponent(ticket)}`);
 
                 es.addEventListener("notification", (e: MessageEvent) => {
+                    if (destroyed || useLocalStore.getState().generation !== generation) return;
                     try {
                         const raw = JSON.parse(e.data) as NotificationItem & { read?: boolean };
                         addIncoming(normalizeNotificationItem(raw));
