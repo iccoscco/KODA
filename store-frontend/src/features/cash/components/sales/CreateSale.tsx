@@ -31,7 +31,7 @@ import { useHasPermission } from "@/shared/hooks/usePermission";
 import { PERMISSIONS } from "@/shared/config/permissions";
 import { Product } from "@/features/products/types/productsTypes";
 import { ProductsVariant } from "@/features/products/types/productsVariantTypes";
-import type { CreateSale as CreateSalePayload, PaymentMethod } from "../../types/salesTypes";
+import type { CreateSale as CreateSalePayload, PaymentMethod, Sale } from "../../types/salesTypes";
 import { useCreateSale } from "../../hooks/saleHooks";
 import { CashService } from "../../services/cash.service";
 import { NotificationService } from "@/features/notifications/services/notification.service";
@@ -52,7 +52,7 @@ import { NumericField } from "@/shared/components/NumericField";
 interface Props {
     open: boolean;
     onClose: () => void;
-    onSuccess: (orderId: number) => void;
+    onSuccess: (sale: Sale) => void;
 }
 
 type FormErrors = Record<string, string>;
@@ -636,7 +636,7 @@ export default function CreateSale({ open, onClose, onSuccess }: Props) {
                     .then(setUnreadCount)
                     .catch(() => { });
             }
-            onSuccess(result.id);
+            onSuccess(result);
             onClose();
         } else {
             setSubmitError("No se pudo registrar la venta. Verifica permisos, stock y totales.");

@@ -1,0 +1,21 @@
+@startuml
+actor Cajero
+participant "UI Next.js" as UI
+participant "OrderController" as C
+participant "OrderServiceImpl" as S
+database "PostgreSQL" as DB
+Cajero -> UI : selecciona variantes, cantidades y pago
+UI -> C : POST /orders
+C -> S : crear orden
+S -> DB : consultar variantes y stock
+alt stock insuficiente
+  S --> C : error de validación
+  C --> UI : rechazo, sin descuento
+else stock suficiente
+  S -> DB : guardar orden, ítems, pago y descontar stock
+  S -> S : evaluar mínimo CC-01
+  S --> C : orden y alerta si corresponde
+  C --> UI : confirmación
+end
+note right of S : Refleja la intención del flujo KODA/CC-01;\nla transacción completa requiere prueba E2E.
+@enduml

@@ -343,6 +343,7 @@ export default function Cash() {
 
     // Snackbar
     const [snackbar, setSnackbar] = useState<SnackState>({ open: false, message: "", severity: "success" });
+    const [saleStockAlerts, setSaleStockAlerts] = useState<Sale["stockAlerts"]>([]);
     const showSnack = (message: string, severity: "success" | "error" | "info" = "success") =>
         setSnackbar({ open: true, message, severity });
 
@@ -887,6 +888,19 @@ export default function Cash() {
                     sx={{ mb: 3, borderRadius: 1.5 }}
                 >
                     {snackbar.message}
+                </Alert>
+            )}
+            {!!saleStockAlerts?.length && (
+                <Alert
+                    data-testid="alerta-stock-minimo"
+                    severity="warning"
+                    variant="outlined"
+                    onClose={() => setSaleStockAlerts([])}
+                    sx={{ mb: 3, borderRadius: 1.5 }}
+                >
+                    Stock mínimo alcanzado en esta venta: {saleStockAlerts.map((item) =>
+                        `${item.productName} (${item.variantDescription}): ${item.stock} disponibles, mínimo ${item.minStock}`
+                    ).join("; ")}.
                 </Alert>
             )}
 
@@ -1554,15 +1568,16 @@ export default function Cash() {
             <CreateSale
                 open={createSaleOpen}
                 onClose={() => setCreateSaleOpen(false)}
-                onSuccess={(orderId) => {
+                onSuccess={(sale) => {
                     setCreateSaleOpen(false);
+                    setSaleStockAlerts(sale.stockAlerts ?? []);
                     showSnack("Venta registrada correctamente.");
                     setSalesListRefreshKey((k) => k + 1);
                     void loadStatus();
                     if (tab === 1) void loadHistory();
 
                     // Intentar auto-impresión silenciosa o clásica
-                    void CashService.printReceipt(orderId, (severity, msg) => {
+                    void CashService.printReceipt(sale.id, (severity, msg) => {
                         showSnack(msg, severity);
                     });
                 }}

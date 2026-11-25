@@ -1,0 +1,23 @@
+@startuml
+left to right direction
+actor Cajero
+actor Almacenero
+actor Administrador
+actor SUNAT
+rectangle "ForjaSys · diseño objetivo" {
+  usecase "CU-01 Registrar venta\nRF-07" as Venta
+  usecase "Emitir comprobante\nRF-08 (pendiente)" as Emite
+  usecase "CU-02 Gestionar inventario\nRF-04/05" as Stock
+  usecase "CU-03 Anular comprobante\nRF-10 (pendiente)" as Anula
+  usecase "Consultar reportes\nRF-12" as Reporte
+}
+Cajero --> Venta
+Cajero --> Emite
+Almacenero --> Stock
+Administrador --> Stock
+Administrador --> Anula
+Administrador --> Reporte
+Emite --> SUNAT
+Anula --> SUNAT
+note right of Emite : Diseño objetivo; no implementado en KODA
+@enduml

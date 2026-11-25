@@ -1,0 +1,35 @@
+@startuml
+hide methods
+class Product <<KODA>>
+class ProductVariant <<KODA>> {
+  stock : Integer
+  minStock : Integer
+  version : Long
+}
+class StockMovement <<KODA>>
+class Order <<KODA>> {
+  status : OrderStatus
+  total : BigDecimal
+}
+class OrderItem <<KODA>> {
+  quantity : Integer
+  unitPrice : BigDecimal
+}
+class Payment <<KODA>>
+class User <<KODA>>
+class ComprobanteElectronico <<propuesto>> {
+  serie : String
+  correlativo : Long
+  estadoSunat : Estado
+}
+class NotaCredito <<propuesto>>
+Product "1" -- "*" ProductVariant
+ProductVariant "1" -- "*" StockMovement
+User "1" -- "*" Order
+Order "1" -- "*" OrderItem
+Order "1" -- "*" Payment
+OrderItem "*" --> "1" ProductVariant
+Order "1" -- "0..*" ComprobanteElectronico
+ComprobanteElectronico "1" -- "0..1" NotaCredito
+note bottom of ComprobanteElectronico : Propuesta; no es entidad existente
+@enduml

@@ -6,6 +6,7 @@ import com.yisus.store_backend.cash.repository.CashOpeningRepository;
 import com.yisus.store_backend.cash.repository.CashRegisterRepository;
 import com.yisus.store_backend.cash.service.CashService;
 import com.yisus.store_backend.order.dto.*;
+import com.yisus.store_backend.dashboard.dto.LowStockAlertDTO;
 import com.yisus.store_backend.order.model.*;
 import com.yisus.store_backend.order.repository.*;
 import com.yisus.store_backend.order.service.OrderService;
@@ -79,6 +80,7 @@ public class OrderServiceImpl implements OrderService {
         
         // Calcular total y crear items
         BigDecimal total = BigDecimal.ZERO;
+        List<LowStockAlertDTO> stockAlerts = new ArrayList<>();
         for (OrderItemCreateDTO itemDto : dto.getOrderItems()) {
             ProductVariant variant = productVariantRepository.findById(itemDto.getProductVariantId())
                     .orElseThrow(() -> new RuntimeException("Product variant not found"));
@@ -132,6 +134,14 @@ public class OrderServiceImpl implements OrderService {
             int minStock = variant.getMinStock() != null ? variant.getMinStock() : 0;
             if (newStock <= minStock) {
                 String variantDesc = buildVariantDescription(variant);
+                stockAlerts.add(LowStockAlertDTO.builder()
+                        .variantId(variant.getId())
+                        .productName(product.getName())
+                        .variantDescription(variantDesc)
+                        .stock(newStock)
+                        .minStock(minStock)
+                        .sku(variant.getSku())
+                        .build());
                 NotificationType notifType = newStock == 0 ? NotificationType.ALERT : NotificationType.WARNING;
                 String title = (newStock == 0 ? "Sin stock: " : "Stock bajo: ") + product.getName();
                 String message = variantDesc + " — Stock actual: " + newStock
@@ -196,7 +206,9 @@ public class OrderServiceImpl implements OrderService {
         // No es necesario otro orderRepository.save() porque los FKs están en los hijos
         // y ninguna columna de la tabla orders cambió
         
-        return convertToDTO(savedOrder);
+        OrderDTO response = convertToDTO(savedOrder);
+        response.setStockAlerts(stockAlerts);
+        return response;
     }
     
     @Override

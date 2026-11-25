@@ -58,9 +58,20 @@ export interface Sale {
     total: number;
     orderItems: OrderItem[];
     payments: Payment[];
+    /** Solo se informa en la respuesta de creación de venta. */
+    stockAlerts?: LowStockAlert[];
     shippingAddress: ShippingAddress | null;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface LowStockAlert {
+    variantId: number;
+    productName: string;
+    variantDescription: string;
+    stock: number;
+    minStock: number;
+    sku: string | null;
 }
 
 export interface OrderItemCreate {

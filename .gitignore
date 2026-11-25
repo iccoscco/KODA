@@ -1,0 +1,6 @@
+# Archivos generados al desarrollar y probar localmente.
+**/node_modules/
+**/.next/
+**/next-env.d.ts
+**/target/
+*.log
